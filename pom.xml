@@ -80,6 +80,30 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!-- langchain4j:https://docs.langchain4j.dev/get-started -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j</artifactId>
+            <version>1.5.0</version>
+        </dependency>
+        <!-- langchain4j:https://docs.langchain4j.dev/integrations/language-models/open-ai/#spring-boot -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-open-ai-spring-boot-starter</artifactId>
+            <version>1.5.0-beta11</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-reactor</artifactId>
+            <version></version>
+        </dependency>
+        <!-- https://docs.langchain4j.dev/tutorials/ai-services#streaming -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-reactor</artifactId>
+            <version>1.5.0-beta11</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -108,6 +132,14 @@
                             <version>1.18.36</version>
                         </exclude>
                     </excludes>
+                </configuration>
+            </plugin>
+            <!-- Maven Surefire Plugin for Mockito Agent -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>-XX:+EnableDynamicAgentLoading</argLine>
                 </configuration>
             </plugin>
         </plugins>
