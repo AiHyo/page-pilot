@@ -50,7 +50,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
         // 2. 查询用户是否已存在
         QueryWrapper queryWrapper = new QueryWrapper();
-        queryWrapper.eq("user_account", userAccount);
+        queryWrapper.eq(User::getUserAccount, userAccount);
         long count = this.mapper.selectCountByQuery(queryWrapper);
         if (count > 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号重复");

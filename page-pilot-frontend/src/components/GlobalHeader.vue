@@ -80,6 +80,11 @@ const originItems = [
     title: '用户管理',
   },
   {
+    key: '/admin/appManage',
+    label: '应用管理',
+    title: '应用管理',
+  },
+  {
     key: 'others',
     label: h('a', { href: 'https://github.com/AiHyo', target: '_blank' }, 'GitHub'),
     title: 'GitHub',
@@ -123,7 +128,7 @@ const doLogout = async () => {
     message.success('退出登录成功')
     await router.push('/user/login')
   } else {
-    message.error('退出登录失败，' + res.data.msg)
+    message.error('退出登录失败，' + res.data.message)
   }
 }
 </script>
@@ -131,7 +136,7 @@ const doLogout = async () => {
 <style scoped>
 .header {
   background: #fff;
-  padding: 0 24px;
+  padding: 0 40px;
 }
 
 .header-left {
