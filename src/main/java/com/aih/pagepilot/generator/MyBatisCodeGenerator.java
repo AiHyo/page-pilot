@@ -14,7 +14,7 @@ import java.util.Map;
 public class MyBatisCodeGenerator {
 
     // 要生成的表名
-    private static final String[] TABLE_NAMES = {"user"};
+    private static final String[] TABLE_NAMES = {"app"};
 
     public static void main(String[] args) {
         // 获取数据元信息
@@ -73,8 +73,7 @@ public class MyBatisCodeGenerator {
 
         // 设置生成注释，比如生成的时间和作者，避免后续多余的代码改动
         globalConfig.getJavadocConfig()
-                .setAuthor("<a href=\"https://github.com/AiHyo\">小天</a>")
-                .setSince("");
+                .setAuthor("zeng.liqiang");
         return globalConfig;
     }
 }

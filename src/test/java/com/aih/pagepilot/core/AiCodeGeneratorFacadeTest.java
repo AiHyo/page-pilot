@@ -20,14 +20,14 @@ class AiCodeGeneratorFacadeTest {
 
     @Test
     void generateAndSaveCode() {
-        File file = aiCodeGeneratorFacade.generateAndSaveCode("todo任务清单", CodeGenTypeEnum.MULTI_FILE);
+        File file = aiCodeGeneratorFacade.generateAndSaveCode("todo任务清单, 各个文件不要超过50行", CodeGenTypeEnum.MULTI_FILE, 123L);
         assertNotNull(file);
         assertTrue(file.exists());
     }
 
     @Test
     void generateAndSaveCodeStream() {
-        Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeStream("生成一个番茄时钟任务管理的页面，代码尽量简短", CodeGenTypeEnum.MULTI_FILE);
+        Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeStream("生成一个番茄时钟任务管理的页面，代码尽量简短", CodeGenTypeEnum.MULTI_FILE, 456L);
         // 阻塞等待所有数据收集完成
         List<String> result = codeStream.collectList().block();
         // 验证结果

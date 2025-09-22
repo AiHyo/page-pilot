@@ -50,7 +50,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
         // 2. 查询用户是否已存在
         QueryWrapper queryWrapper = new QueryWrapper();
-        queryWrapper.eq("userAccount", userAccount);
+        queryWrapper.eq("user_account", userAccount);
         long count = this.mapper.selectCountByQuery(queryWrapper);
         if (count > 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号重复");
@@ -61,7 +61,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         User user = new User();
         user.setUserAccount(userAccount);
         user.setUserPassword(encryptPassword);
-        user.setUserName("无名");
+        user.setUserName("AiHyo");
         user.setUserRole(UserRoleEnum.USER.getValue());
         boolean saveResult = this.save(user);
         if (!saveResult) {
@@ -96,8 +96,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         String encryptPassword = getEncryptPassword(userPassword);
         // 3. 查询用户是否存在
         QueryWrapper queryWrapper = new QueryWrapper();
-        queryWrapper.eq("userAccount", userAccount);
-        queryWrapper.eq("userPassword", encryptPassword);
+        queryWrapper.eq(User::getUserAccount, userAccount);
+        queryWrapper.eq(User::getUserPassword, encryptPassword);
         User user = this.mapper.selectOneByQuery(queryWrapper);
         if (user == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户不存在或密码错误");
@@ -170,11 +170,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         String sortField = userQueryRequest.getSortField();
         String sortOrder = userQueryRequest.getSortOrder();
         return QueryWrapper.create()
-                .eq("id", id) // where id = ${id}
-                .eq("userRole", userRole) // and userRole = ${userRole}
-                .like("userAccount", userAccount)
-                .like("userName", userName)
-                .like("userProfile", userProfile)
+                .eq(User::getId, id)
+                .eq(User::getUserRole, userRole)
+                .like(User::getUserAccount, userAccount)
+                .like(User::getUserName, userName)
+                .like(User::getUserProfile, userProfile)
                 .orderBy(sortField, "ascend".equals(sortOrder));
     }
 
