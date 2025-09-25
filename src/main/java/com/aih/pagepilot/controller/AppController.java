@@ -19,6 +19,7 @@ import com.aih.pagepilot.model.dto.AppQueryRequest;
 import com.aih.pagepilot.model.dto.AppUpdateRequest;
 import com.aih.pagepilot.model.entity.User;
 import com.aih.pagepilot.model.vo.AppVO;
+import com.aih.pagepilot.service.ChatHistoryService;
 import com.aih.pagepilot.service.UserService;
 import com.mybatisflex.core.paginate.Page;
 import org.springframework.http.MediaType;
@@ -34,7 +35,6 @@ import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -53,6 +53,9 @@ public class AppController {
 
     @Resource
     private UserService userService;
+
+    @Resource
+    private ChatHistoryService chatHistoryService;
 
     /**
      * 创建应用
@@ -107,6 +110,9 @@ public class AppController {
         if (!appService.hasPermission(oldApp, request)) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
         }
+        
+        // 先删除应用的所有对话历史
+        chatHistoryService.removeByAppId(id);
         
         boolean result = appService.removeById(id);
         return ResultUtils.success(result);
@@ -229,6 +235,9 @@ public class AppController {
         // 判断是否存在
         App oldApp = appService.getById(id);
         ThrowUtils.throwIf(oldApp == null, ErrorCode.NOT_FOUND_ERROR);
+
+        // 先删除应用的所有对话历史
+        chatHistoryService.removeByAppId(id);
         
         boolean result = appService.removeById(id);
         return ResultUtils.success(result);

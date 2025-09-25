@@ -8,6 +8,8 @@ import cn.hutool.core.util.StrUtil;
 import com.aih.pagepilot.ai.model.enums.CodeGenTypeEnum;
 import com.aih.pagepilot.core.AiCodeGeneratorFacade;
 import com.aih.pagepilot.exception.ThrowUtils;
+import com.aih.pagepilot.model.enums.MessageTypeEnum;
+import com.aih.pagepilot.service.ChatHistoryService;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.aih.pagepilot.constant.AppConstant;
@@ -48,6 +50,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     private UserService userService;
     @Resource
     private AiCodeGeneratorFacade aiCodeGeneratorFacade;
+    @Resource
+    private ChatHistoryService chatHistoryService;
 
     @Override
     public void validApp(App app, boolean add) {
@@ -201,8 +205,30 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "不支持的代码生成类型");
         }
-        // 5. 调用 AI 生成代码
-        return aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appId);
+        // 5. 通过校验后，添加用户消息到对话历史
+        chatHistoryService.addChatMessage(appId, message, MessageTypeEnum.USER.getValue(), loginUser.getId());
+        // 6. 调用 AI 生成代码（流式）
+        Flux<String> contentFlux = aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appId);
+        // 7. 收集AI响应内容并在完成后记录到对话历史
+        StringBuilder aiResponseBuilder = new StringBuilder();
+        return contentFlux
+                .map(chunk -> {
+                    // 收集AI响应内容
+                    aiResponseBuilder.append(chunk);
+                    return chunk;
+                })
+                .doOnComplete(() -> {
+                    // 流式响应完成后，添加AI消息到对话历史
+                    String aiResponse = aiResponseBuilder.toString();
+                    if (StrUtil.isNotBlank(aiResponse)) {
+                        chatHistoryService.addChatMessage(appId, aiResponse, MessageTypeEnum.AI.getValue(), loginUser.getId());
+                    }
+                })
+                .doOnError(error -> {
+                    // 如果AI回复失败，也要记录错误消息
+                    String errorMessage = "AI回复失败: " + error.getMessage();
+                    chatHistoryService.addChatMessage(appId, errorMessage, MessageTypeEnum.AI.getValue(), loginUser.getId());
+                });
     }
 
     @Override
