@@ -6,6 +6,7 @@ import { addApp, listMyAppVoByPage, listFeaturedAppVoByPage } from '@/api/appCon
 import { useLoginUserStore } from '@/stores/loginUser'
 import { CODE_GEN_TYPE_OPTIONS, getCodeGenTypeLabel } from '@/constants/codeGenType'
 import { getDeployUrl } from '@/config/env'
+import AppCard from '@/components/AppCard.vue'
 
 const router = useRouter()
 const loginUserStore = useLoginUserStore()
@@ -133,26 +134,38 @@ const onFeaturedAppsPageChange = (page: number) => {
   loadFeaturedApps(page)
 }
 
-// 查看对话页面（带view参数）
-const viewDialog = (app: API.AppVO) => {
-  router.push(`/app/chat/${app.id}?view=1`)
-}
-
-// 查看已部署的作品
-const viewWork = (app: API.AppVO) => {
-  if (app.deployKey) {
-    const url = getDeployUrl(app.deployKey)
-    console.log('部署URL:', url, '部署密钥:', app.deployKey)
-    window.open(url, '_blank')
-  } else {
-    message.warning('该应用尚未部署')
+// 处理应用卡片操作
+const handleAppAction = (key: string, app: API.AppVO) => {
+  switch (key) {
+    case 'viewDialog':
+      router.push(`/app/chat/${app.id}?view=1`)
+      break
+    case 'viewWork':
+      if (app.deployKey) {
+        const url = getDeployUrl(app.deployKey)
+        console.log('部署URL:', url, '部署密钥:', app.deployKey)
+        window.open(url, '_blank')
+      } else {
+        message.warning('该应用尚未部署')
+      }
+      break
+    case 'enterApp':
+      router.push(`/app/chat/${app.id}`)
+      break
   }
 }
 
-// 进入应用详情/对话页面（保留原有方法）
-const enterApp = (app: API.AppVO) => {
-  router.push(`/app/chat/${app.id}`)
-}
+// 我的应用操作配置
+const myAppActions = [
+  { label: '查看对话', key: 'viewDialog' },
+  { label: '查看作品', key: 'viewWork', condition: true }
+]
+
+// 精选应用操作配置
+const featuredAppActions = [
+  { label: '查看对话', key: 'viewDialog' },
+  { label: '查看作品', key: 'viewWork', condition: true }
+]
 
 onMounted(() => {
   loadMyApps()
@@ -209,49 +222,16 @@ onMounted(() => {
     <div v-if="loginUserStore.loginUser.id" class="section">
       <h2 class="section-title">我的作品</h2>
       <div class="apps-grid">
-        <a-card
+        <AppCard
           v-for="app in myApps"
           :key="app.id"
-          :hoverable="true"
-          class="app-card"
-        >
-          <template #cover>
-            <div class="app-cover">
-              <img 
-                v-if="app.cover" 
-                :src="app.cover" 
-                :alt="app.appName"
-                class="cover-image"
-              />
-              <div v-else class="default-cover">
-                📄
-              </div>
-            </div>
-          </template>
-          <a-card-meta>
-            <template #title>{{ app.appName }}</template>
-            <template #description>
-              创建于 {{ app.createTime }}
-            </template>
-          </a-card-meta>
-          <template #actions>
-            <a-button 
-              type="link" 
-              size="small"
-              @click="viewDialog(app)"
-            >
-              查看对话
-            </a-button>
-            <a-button 
-              v-if="app.deployKey"
-              type="link" 
-              size="small"
-              @click="viewWork(app)"
-            >
-              查看作品
-            </a-button>
-          </template>
-        </a-card>
+          :app="app"
+          :actions="myAppActions.map(action => ({
+            ...action,
+            condition: action.key === 'viewWork' ? !!app.deployKey : true
+          }))"
+          @action="handleAppAction"
+        />
       </div>
       
       <div v-if="myApps.length === 0 && !myAppsLoading" class="empty-state">
@@ -273,57 +253,18 @@ onMounted(() => {
     <div class="section">
       <h2 class="section-title">精选案例</h2>
       <div class="apps-grid">
-        <a-card
+        <AppCard
           v-for="app in featuredApps"
           :key="app.id"
-          :hoverable="true"
-          class="app-card featured-card"
-        >
-          <template #cover>
-            <div class="app-cover">
-              <img 
-                v-if="app.cover" 
-                :src="app.cover" 
-                :alt="app.appName"
-                class="cover-image"
-              />
-              <div v-else class="default-cover">
-                📄
-              </div>
-            </div>
-          </template>
-          <a-card-meta>
-            <template #title>
-              <div class="featured-title">
-                {{ app.appName }}
-                <span class="featured-badge">精选</span>
-              </div>
-            </template>
-            <template #description>
-              <div class="app-author">
-                <a-avatar :size="20" :src="app.user?.userAvatar" />
-                <span>{{ app.user?.userName || 'NoCode 官方' }}</span>
-              </div>
-            </template>
-          </a-card-meta>
-          <template #actions>
-            <a-button 
-              type="link" 
-              size="small"
-              @click="viewDialog(app)"
-            >
-              查看对话
-            </a-button>
-            <a-button 
-              v-if="app.deployKey"
-              type="link" 
-              size="small"
-              @click="viewWork(app)"
-            >
-              查看作品
-            </a-button>
-          </template>
-        </a-card>
+          :app="app"
+          :show-featured-badge="true"
+          :show-author="true"
+          :actions="featuredAppActions.map(action => ({
+            ...action,
+            condition: action.key === 'viewWork' ? !!app.deployKey : true
+          }))"
+          @action="handleAppAction"
+        />
       </div>
       
       <div v-if="featuredApps.length === 0 && !featuredAppsLoading" class="empty-state">
@@ -488,56 +429,6 @@ onMounted(() => {
   margin: 0 auto;
 }
 
-.app-card {
-  border-radius: 12px;
-  overflow: hidden;
-  transition: all 0.3s ease;
-  cursor: pointer;
-}
-
-.app-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-}
-
-.app-cover {
-  height: 180px;
-  background: #f5f5f5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.cover-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.default-cover {
-  font-size: 48px;
-  color: #ccc;
-}
-
-.featured-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.featured-badge {
-  background: #ff4d4f;
-  color: white;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
-.app-author {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 
 .empty-state {
   text-align: center;

@@ -9,6 +9,7 @@ import {
 } from '@/api/appController'
 import { useLoginUserStore } from '@/stores/loginUser'
 import { CODE_GEN_TYPE_OPTIONS, getCodeGenTypeLabel } from '@/constants/codeGenType'
+import SearchForm from '@/components/SearchForm.vue'
 
 const router = useRouter()
 const loginUserStore = useLoginUserStore()
@@ -25,12 +26,33 @@ const pagination = ref({
   showTotal: (total: number) => `共 ${total} 条记录`,
 })
 
-// 搜索表单
-const searchForm = ref({
-  appName: '',
-  userId: undefined as string | undefined,
-  codeGenType: '',
-})
+// 搜索表单字段配置
+const searchFields = [
+  {
+    key: 'appName',
+    label: '应用名称',
+    type: 'input' as const,
+    placeholder: '请输入应用名称',
+    prefix: '🔍',
+    width: '220px'
+  },
+  {
+    key: 'userId',
+    label: '用户ID',
+    type: 'input' as const,
+    placeholder: '请输入用户ID',
+    prefix: '👤',
+    width: '180px'
+  },
+  {
+    key: 'codeGenType',
+    label: '代码类型',
+    type: 'select' as const,
+    placeholder: '请选择代码类型',
+    width: '160px',
+    options: CODE_GEN_TYPE_OPTIONS
+  }
+]
 
 // 表格列定义
 const columns = [
@@ -86,19 +108,22 @@ const columns = [
   },
 ]
 
+// 当前搜索条件
+const currentSearchParams = ref<Record<string, any>>({})
+
 // 加载数据
 const loadData = async () => {
   loading.value = true
   try {
-    const params = {
-      pageNum: pagination.value.current,
-      pageSize: pagination.value.pageSize,
-      appName: searchForm.value.appName || undefined,
-      userId: searchForm.value.userId,
-      codeGenType: searchForm.value.codeGenType || undefined,
-    }
-
-    const res = await listAppVoByPageAdmin(params)
+    const res = await listAppVoByPageAdmin({
+      appQueryRequest: {
+        pageNum: pagination.value.current,
+        pageSize: pagination.value.pageSize,
+        appName: currentSearchParams.value.appName || undefined,
+        userId: currentSearchParams.value.userId || undefined,
+        codeGenType: currentSearchParams.value.codeGenType || undefined,
+      }
+    })
     
     if (res.data.code === 0 && res.data.data) {
       dataSource.value = res.data.data.records || []
@@ -114,18 +139,15 @@ const loadData = async () => {
 }
 
 // 搜索
-const handleSearch = () => {
+const handleSearch = (searchParams: Record<string, any>) => {
+  currentSearchParams.value = { ...searchParams }
   pagination.value.current = 1
   loadData()
 }
 
 // 重置搜索
 const handleReset = () => {
-  searchForm.value = {
-    appName: '',
-    userId: undefined,
-    codeGenType: '',
-  }
+  currentSearchParams.value = {}
   pagination.value.current = 1
   loadData()
 }
@@ -208,62 +230,12 @@ onMounted(() => {
     </div>
 
     <!-- 搜索表单 -->
-    <a-card class="search-card" style="margin-bottom: 16px">
-      <a-form layout="inline" :model="searchForm" class="search-form">
-        <a-form-item label="应用名称">
-          <a-input 
-            v-model:value="searchForm.appName" 
-            placeholder="请输入应用名称"
-            style="width: 220px"
-            allow-clear
-          >
-            <template #prefix>
-              🔍
-            </template>
-          </a-input>
-        </a-form-item>
-        <a-form-item label="用户ID">
-          <a-input 
-            v-model:value="searchForm.userId" 
-            placeholder="请输入用户ID"
-            style="width: 180px"
-            allow-clear
-          >
-            <template #prefix>
-              👤
-            </template>
-          </a-input>
-        </a-form-item>
-        <a-form-item label="代码类型">
-          <a-select 
-            v-model:value="searchForm.codeGenType" 
-            placeholder="请选择代码类型"
-            style="width: 160px"
-            allow-clear
-          >
-            <a-select-option 
-              v-for="option in CODE_GEN_TYPE_OPTIONS" 
-              :key="option.value" 
-              :value="option.value"
-            >
-              {{ option.label }}
-            </a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item>
-          <a-space>
-            <a-button type="primary" @click="handleSearch" class="search-btn">
-              <template #icon>🔍</template>
-              搜索
-            </a-button>
-            <a-button @click="handleReset" class="reset-btn">
-              <template #icon>🔄</template>
-              重置
-            </a-button>
-          </a-space>
-        </a-form-item>
-      </a-form>
-    </a-card>
+    <SearchForm
+      :fields="searchFields"
+      :loading="loading"
+      @search="handleSearch"
+      @reset="handleReset"
+    />
 
     <!-- 数据表格 -->
     <a-card>
@@ -441,50 +413,6 @@ onMounted(() => {
   font-size: 16px;
 }
 
-.search-card {
-  margin-bottom: 20px;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  border: none;
-}
-
-.search-form {
-  padding: 8px 0;
-}
-
-.search-form .ant-form-item {
-  margin-bottom: 16px;
-}
-
-.search-form .ant-form-item-label > label {
-  font-weight: 500;
-  color: #333;
-}
-
-.search-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
-  border-radius: 8px;
-  font-weight: 500;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-  transition: all 0.3s ease;
-}
-
-.search-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-}
-
-.reset-btn {
-  border-radius: 8px;
-  border-color: #d9d9d9;
-  transition: all 0.3s ease;
-}
-
-.reset-btn:hover {
-  border-color: #40a9ff;
-  color: #40a9ff;
-}
 
 /* ID标签样式 */
 .id-tag {

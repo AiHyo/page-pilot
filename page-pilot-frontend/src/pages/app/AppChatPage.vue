@@ -4,10 +4,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { DownOutlined } from '@ant-design/icons-vue'
 import { getAppVoById, deployApp, deleteApp } from '@/api/appController'
+import { getLatestChatHistory, listAppChatHistory, addChatHistory } from '@/api/chatHistoryController'
 import { useLoginUserStore } from '@/stores/loginUser'
 import { getCodeGenTypeLabel } from '@/constants/codeGenType'
 import { getPreviewUrl } from '@/config/env'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
+import AppDetailModal from '@/components/AppDetailModal.vue'
 import aiAvatarUrl from '@/assets/aiAvatar.png'
 
 const route = useRoute()
@@ -21,16 +23,22 @@ const app = ref<API.AppVO>()
 const loading = ref(false)
 const deploying = ref(false)
 
-// 对话相关
 const messages = ref<Array<{
   id: string
   type: 'user' | 'ai'
   content: string
   timestamp: string
-}>>([])
+  createTime?: string
+}>>([])  
 const userInput = ref('')
 const isGenerating = ref(false)
 const generationComplete = ref(false)
+
+// 历史消息加载相关
+const historyLoading = ref(false)
+const hasMoreHistory = ref(true)
+const lastCreateTime = ref<string | undefined>(undefined)
+const historyLoaded = ref(false)
 
 // 预览相关
 const previewUrl = ref('')
@@ -38,33 +46,122 @@ const showPreview = ref(false)
 
 // 权限相关
 const isOwner = ref(false)
-const isViewMode = ref(false)
 
 // 应用详情弹窗
 const detailModalVisible = ref(false)
-const deleting = ref(false)
 
 // 滚动相关
 const chatMessagesRef = ref<HTMLElement>()
 const userHasScrolled = ref(false)
 const isAtBottom = ref(true)
 
+// 加载历史消息
+const loadHistoryMessages = async () => {
+  if (historyLoaded.value) return
+  
+  historyLoading.value = true
+  try {
+    const res = await getLatestChatHistory({ appId: appId as any, limit: 10 })
+    if (res.data.code === 0 && res.data.data) {
+      const historyMessages = res.data.data.map((item: API.ChatHistoryVO) => ({
+        id: item.id?.toString() || Date.now().toString(),
+        type: item.messageType === 'USER' ? 'user' : 'ai' as 'user' | 'ai',
+        content: item.message || '',
+        timestamp: new Date(item.createTime || '').toLocaleTimeString(),
+        createTime: item.createTime
+      }))
+      
+      // 按时间升序排列
+      historyMessages.sort((a, b) => new Date(a.createTime || '').getTime() - new Date(b.createTime || '').getTime())
+      
+      messages.value = historyMessages
+      
+      // 设置最早的消息时间用于分页
+      if (historyMessages.length > 0) {
+        lastCreateTime.value = historyMessages[0].createTime
+        hasMoreHistory.value = historyMessages.length >= 10
+      }
+      
+      historyLoaded.value = true
+      
+      // 如果有历史消息且消息数量>=2，显示预览
+      if (historyMessages.length >= 2) {
+        showPreview.value = true
+        previewUrl.value = getPreviewUrl(app.value?.codeGenType || '', appId)
+        generationComplete.value = true
+      }
+      
+      // 滚动到底部
+      nextTick(() => {
+        scrollToBottom(true)
+      })
+    }
+  } catch (error) {
+    console.error('加载历史消息失败:', error)
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+// 加载更多历史消息
+const loadMoreHistory = async () => {
+  if (historyLoading.value || !hasMoreHistory.value || !lastCreateTime.value) return
+  
+  historyLoading.value = true
+  try {
+    const res = await listAppChatHistory({ 
+      appId: appId as any, 
+      pageSize: 10,
+      lastCreateTime: lastCreateTime.value
+    })
+    
+    if (res.data.code === 0 && res.data.data?.records) {
+      const newMessages = res.data.data.records.map((item: API.ChatHistory) => ({
+        id: item.id?.toString() || Date.now().toString(),
+        type: item.messageType === 'USER' ? 'user' : 'ai' as 'user' | 'ai',
+        content: item.message || '',
+        timestamp: new Date(item.createTime || '').toLocaleTimeString(),
+        createTime: item.createTime
+      }))
+      
+      // 按时间升序排列
+      newMessages.sort((a, b) => new Date(a.createTime || '').getTime() - new Date(b.createTime || '').getTime())
+      
+      // 添加到消息列表开头
+      messages.value = [...newMessages, ...messages.value]
+      
+      // 更新分页信息
+      if (newMessages.length > 0) {
+        lastCreateTime.value = newMessages[0].createTime
+        hasMoreHistory.value = newMessages.length >= 10
+      } else {
+        hasMoreHistory.value = false
+      }
+    }
+  } catch (error) {
+    console.error('加载更多历史消息失败:', error)
+    message.error('加载更多历史消息失败')
+  } finally {
+    historyLoading.value = false
+  }
+}
+
 // 加载应用信息
 const loadApp = async () => {
   loading.value = true
   try {
-    // 检查是否为查看模式
-    isViewMode.value = route.query.view === '1'
-    
-    const res = await getAppVoById({ id: appId })
+    const res = await getAppVoById({ id: appId as any })
     if (res.data.code === 0 && res.data.data) {
       app.value = res.data.data
       
       // 检查是否为应用所有者
       isOwner.value = app.value.userId === loginUserStore.loginUser.id
       
-      // 只有在非查看模式且有初始化提示词时才自动发送
-      if (!isViewMode.value && app.value.initPrompt) {
+      // 先加载历史消息
+      await loadHistoryMessages()
+      
+      // 只有在是自己的应用且没有对话历史时才自动发送初始消息
+      if (isOwner.value && messages.value.length === 0 && app.value.initPrompt) {
         await sendMessage(app.value.initPrompt, true)
       }
     } else {
@@ -87,24 +184,40 @@ const sendMessage = async (content: string, isInitial = false) => {
   if (!messageContent) return
 
   // 添加用户消息
+  const userMessage = {
+    id: Date.now().toString(),
+    type: 'user' as const,
+    content: messageContent,
+    timestamp: new Date().toLocaleTimeString(),
+    createTime: new Date().toISOString()
+  }
+  
   if (!isInitial) {
-    messages.value.push({
-      id: Date.now().toString(),
-      type: 'user',
-      content: messageContent,
-      timestamp: new Date().toLocaleTimeString()
-    })
+    messages.value.push(userMessage)
     scrollToBottom()
+    
+    // 保存用户消息到后端
+    try {
+      await addChatHistory({
+        message: messageContent,
+        messageType: 'USER',
+        appId: appId as any
+      })
+    } catch (error) {
+      console.error('保存用户消息失败:', error)
+    }
   }
 
   // 添加AI消息占位符
   const aiMessageId = Date.now().toString() + '_ai'
-  messages.value.push({
+  const aiMessage = {
     id: aiMessageId,
-    type: 'ai',
+    type: 'ai' as const,
     content: '',
-    timestamp: new Date().toLocaleTimeString()
-  })
+    timestamp: new Date().toLocaleTimeString(),
+    createTime: new Date().toISOString()
+  }
+  messages.value.push(aiMessage)
 
   userInput.value = ''
   isGenerating.value = true
@@ -154,6 +267,20 @@ const sendMessage = async (content: string, isInitial = false) => {
         showPreview.value = true
         previewUrl.value = getPreviewUrl(app.value?.codeGenType || '', appId)
         message.success('代码生成完成！')
+        
+        // 保存AI消息到后端
+        const aiMessage = messages.value.find(msg => msg.id === aiMessageId)
+        if (aiMessage && aiMessage.content) {
+          try {
+            addChatHistory({
+              message: aiMessage.content,
+              messageType: 'AI',
+              appId: appId as any
+            })
+          } catch (error) {
+            console.error('保存AI消息失败:', error)
+          }
+        }
       }
     })
 
@@ -180,7 +307,7 @@ const handleDeploy = async () => {
 
   deploying.value = true
   try {
-    const res = await deployApp({ appId })
+    const res = await deployApp({ appId: appId as any })
     if (res.data.code === 0) {
       message.success(`部署成功！访问地址：${res.data.data}`)
     } else {
@@ -203,22 +330,9 @@ const handleEdit = () => {
   router.push(`/app/edit/${appId}`)
 }
 
-// 删除应用
-const handleDelete = async () => {
-  deleting.value = true
-  try {
-    const res = await deleteApp({ id: appId })
-    if (res.data.code === 0) {
-      message.success('删除成功')
-      router.push('/')
-    } else {
-      message.error('删除失败：' + res.data.message)
-    }
-  } catch (error) {
-    message.error('删除失败')
-  } finally {
-    deleting.value = false
-  }
+// 刷新应用数据
+const handleRefresh = () => {
+  loadApp()
 }
 
 // 滚动到底部
@@ -321,6 +435,23 @@ onMounted(() => {
             class="chat-messages"
             @scroll="handleScroll"
           >
+            <!-- 加载更多历史消息按钮 -->
+            <div 
+              v-if="hasMoreHistory && historyLoaded && messages.length > 0" 
+              class="load-more-container"
+            >
+              <a-button 
+                type="dashed" 
+                :loading="historyLoading"
+                @click="loadMoreHistory"
+                class="load-more-btn"
+                block
+              >
+                <template #icon v-if="!historyLoading">📜</template>
+                {{ historyLoading ? '加载中...' : '加载更多历史消息' }}
+              </a-button>
+            </div>
+
             <div
               v-for="msg in messages"
               :key="msg.id"
@@ -503,68 +634,12 @@ onMounted(() => {
     </a-spin>
 
     <!-- 应用详情弹窗 -->
-    <a-modal
-      v-model:open="detailModalVisible"
-      title="应用详情"
-      :footer="null"
-      width="500px"
-    >
-      <div class="app-detail-content">
-        <!-- 应用基础信息 -->
-        <div class="detail-section">
-          <h4 class="section-title">基础信息</h4>
-          <div class="info-item">
-            <span class="info-label">应用名称：</span>
-            <span class="info-value">{{ app?.appName }}</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">创建者：</span>
-            <div class="creator-info">
-              <a-avatar :size="24" :src="app?.user?.userAvatar">
-                {{ app?.user?.userName?.[0] }}
-              </a-avatar>
-              <span class="creator-name">{{ app?.user?.userName }}</span>
-            </div>
-          </div>
-          <div class="info-item">
-            <span class="info-label">创建时间：</span>
-            <span class="info-value">{{ app?.createTime }}</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">代码类型：</span>
-            <span class="info-value">{{ app?.codeGenType ? getCodeGenTypeLabel(app.codeGenType) : '未设置' }}</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">部署状态：</span>
-            <a-tag v-if="app?.deployKey" color="green">已部署</a-tag>
-            <a-tag v-else color="orange">未部署</a-tag>
-          </div>
-        </div>
-
-        <!-- 操作栏（仅本人或管理员可见） -->
-        <div 
-          v-if="isOwner || loginUserStore.loginUser.userRole === 'admin'" 
-          class="detail-section operation-section"
-        >
-          <h4 class="section-title">操作</h4>
-          <div class="operation-buttons">
-            <a-button type="primary" @click="handleEdit">
-              修改应用
-            </a-button>
-            <a-popconfirm
-              title="确定要删除这个应用吗？删除后将无法恢复！"
-              ok-text="确定删除"
-              cancel-text="取消"
-              @confirm="handleDelete"
-            >
-              <a-button type="primary" danger :loading="deleting">
-                删除应用
-              </a-button>
-            </a-popconfirm>
-          </div>
-        </div>
-      </div>
-    </a-modal>
+    <AppDetailModal
+      v-model:visible="detailModalVisible"
+      :app="app"
+      :loading="loading"
+      @refresh="handleRefresh"
+    />
   </div>
 </template>
 
@@ -1050,6 +1125,38 @@ onMounted(() => {
   border: none;
 }
 
+/* 加载更多按钮样式 */
+.load-more-container {
+  padding: 16px 20px 8px 20px;
+  text-align: center;
+}
+
+.load-more-btn {
+  border-radius: 8px;
+  border: 2px dashed #d9d9d9;
+  background: #fafafa;
+  color: #666;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.load-more-btn:hover {
+  border-color: #40a9ff;
+  background: #f0f8ff;
+  color: #40a9ff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(64, 169, 255, 0.15);
+}
+
+.load-more-btn:active {
+  transform: translateY(0);
+}
+
 .disabled-input {
   cursor: not-allowed !important;
   background-color: #f5f5f5 !important;
@@ -1060,70 +1167,4 @@ onMounted(() => {
   border-color: #d9d9d9 !important;
 }
 
-/* 应用详情弹窗样式 */
-.app-detail-content {
-  padding: 8px 0;
-}
-
-.detail-section {
-  margin-bottom: 24px;
-}
-
-.detail-section:last-child {
-  margin-bottom: 0;
-}
-
-.section-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #262626;
-  margin: 0 0 16px 0;
-  border-bottom: 1px solid #f0f0f0;
-  padding-bottom: 8px;
-}
-
-.info-item {
-  display: flex;
-  align-items: center;
-  margin-bottom: 12px;
-  line-height: 1.5;
-}
-
-.info-item:last-child {
-  margin-bottom: 0;
-}
-
-.info-label {
-  font-weight: 500;
-  color: #595959;
-  min-width: 80px;
-  flex-shrink: 0;
-}
-
-.info-value {
-  color: #262626;
-  flex: 1;
-}
-
-.creator-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-}
-
-.creator-name {
-  color: #262626;
-  font-weight: 500;
-}
-
-.operation-section {
-  border-top: 1px solid #f0f0f0;
-  padding-top: 16px;
-}
-
-.operation-buttons {
-  display: flex;
-  gap: 12px;
-}
 </style>
