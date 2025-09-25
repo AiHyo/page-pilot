@@ -96,7 +96,7 @@
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-reactor</artifactId>
-            <version></version>
+            <version>1.5.0-beta11</version>
         </dependency>
         <!-- https://docs.langchain4j.dev/tutorials/ai-services#streaming -->
         <dependency>
@@ -104,6 +104,18 @@
             <artifactId>langchain4j-reactor</artifactId>
             <version>1.5.0-beta11</version>
         </dependency>
+        <!-- https://docs.langchain4j.dev/integrations/embedding-stores/redis/ -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-community-redis-spring-boot-starter</artifactId>
+            <version>1.1.0-beta7</version> <!-- 1.5.0-beta11版本需要支持redisjson -->
+        </dependency>
+        <!-- caffieine缓存 -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
     </dependencies>
 
     <build>

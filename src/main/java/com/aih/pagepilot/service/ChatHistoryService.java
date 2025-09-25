@@ -6,6 +6,7 @@ import com.aih.pagepilot.model.entity.User;
 import com.aih.pagepilot.model.vo.ChatHistoryVO;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.List;
@@ -118,4 +119,6 @@ public interface ChatHistoryService extends IService<ChatHistory> {
     com.mybatisflex.core.paginate.Page<ChatHistory> listAppChatHistoryByPage(Long appId, int pageSize,
                                                                               java.time.LocalDateTime lastCreateTime,
                                                                               User loginUser);
+
+    int loadChatHistoryToMemory(Long appId, MessageWindowChatMemory chatMemory, int maxCount);
 }

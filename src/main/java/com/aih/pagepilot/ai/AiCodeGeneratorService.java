@@ -2,7 +2,9 @@ package com.aih.pagepilot.ai;
 
 import com.aih.pagepilot.ai.model.HtmlCodeResult;
 import com.aih.pagepilot.ai.model.MultiFileCodeResult;
+import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.SystemMessage;
+import dev.langchain4j.service.UserMessage;
 import reactor.core.publisher.Flux;
 
 /**
@@ -51,4 +53,8 @@ public interface AiCodeGeneratorService {
      */
     @SystemMessage(fromResource = "prompt/codegen-multi-file-system-prompt.txt")
     Flux<String> generateMultiFileCodeStream(String userMessage);
+
+    
+    @SystemMessage(fromResource = "prompt/codegen-html-system-prompt.txt")
+    HtmlCodeResult generateHtmlCode(@MemoryId int memoryId, @UserMessage String userMessage);
 }
