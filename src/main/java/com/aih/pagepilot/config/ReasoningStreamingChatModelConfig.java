@@ -7,6 +7,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.time.Duration;
+
 /**
  * <p>
  * 推理流式模型配置类
@@ -43,6 +45,7 @@ public class ReasoningStreamingChatModelConfig {
                 .maxTokens(maxTokens)
                 .logRequests(true)
                 .logResponses(true)
+                .timeout(Duration.ofMinutes(10))
                 .build();
     }
 }
