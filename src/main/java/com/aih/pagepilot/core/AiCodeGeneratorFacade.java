@@ -45,14 +45,12 @@ public class AiCodeGeneratorFacade {
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "生成类型不能为空");
         }
-        switch (codeGenTypeEnum) {
-            case HTML:
-                return generateAndSaveHtmlCode(userMessage, appId);
-            case MULTI_FILE:
-                return generateAndSaveMultiFileCode(userMessage, appId);
-            default:
-                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "不支持的生成类型：" + codeGenTypeEnum.getValue());
-        }
+        return switch (codeGenTypeEnum) {
+            case HTML -> generateAndSaveHtmlCode(userMessage, appId);
+            case MULTI_FILE -> generateAndSaveMultiFileCode(userMessage, appId);
+            default ->
+                    throw new BusinessException(ErrorCode.SYSTEM_ERROR, "不支持的生成类型：" + codeGenTypeEnum.getValue());
+        };
     }
 
     /**
@@ -62,7 +60,7 @@ public class AiCodeGeneratorFacade {
      * @return
      */
     private File generateAndSaveMultiFileCode(String userMessage, Long appId) {
-        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId);
+        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId, CodeGenTypeEnum.MULTI_FILE);
         MultiFileCodeResult result = aiCodeGeneratorService.generateMultiFileCode(userMessage);
         return CodeFileSaverExecutor.executeSaver(result, CodeGenTypeEnum.MULTI_FILE, appId);
     }
@@ -74,7 +72,7 @@ public class AiCodeGeneratorFacade {
      * @return
      */
     private File generateAndSaveHtmlCode(String userMessage, Long appId) {
-        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId);
+        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId, CodeGenTypeEnum.HTML);
         HtmlCodeResult result = aiCodeGeneratorService.generateHtmlCode(userMessage);
         return CodeFileSaverExecutor.executeSaver(result, CodeGenTypeEnum.HTML, appId);
     }
@@ -90,22 +88,26 @@ public class AiCodeGeneratorFacade {
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "生成类型不能为空");
         }
-        switch (codeGenTypeEnum) {
-            case HTML: {
-                AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId);
+
+        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId, codeGenTypeEnum);
+        return switch (codeGenTypeEnum) {
+            case HTML -> {
                 Flux<String> codeStream = aiCodeGeneratorService.generateHtmlCodeStream(userMessage);
-                return processCodeStream(codeStream, CodeGenTypeEnum.HTML, appId);
+                yield processCodeStream(codeStream, CodeGenTypeEnum.HTML, appId);
             }
-            case MULTI_FILE: {
-                AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId);
+            case MULTI_FILE -> {
                 Flux<String> codeStream = aiCodeGeneratorService.generateMultiFileCodeStream(userMessage);
-                return processCodeStream(codeStream, CodeGenTypeEnum.MULTI_FILE, appId);
+                yield processCodeStream(codeStream, CodeGenTypeEnum.MULTI_FILE, appId);
             }
-            default: {
+            case VUE_PROJECT -> {
+                Flux<String> codeStream = aiCodeGeneratorService.generateVueProjectCodeStream(appId, userMessage);
+                yield processCodeStream(codeStream, CodeGenTypeEnum.MULTI_FILE, appId);
+            }
+            default -> {
                 String errorMessage = "不支持的生成类型：" + codeGenTypeEnum.getValue();
                 throw new BusinessException(ErrorCode.SYSTEM_ERROR, errorMessage);
             }
-        }
+        };
     }
 
     /**
