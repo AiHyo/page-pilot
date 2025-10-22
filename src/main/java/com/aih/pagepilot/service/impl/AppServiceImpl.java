@@ -7,6 +7,7 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import com.aih.pagepilot.ai.model.enums.CodeGenTypeEnum;
 import com.aih.pagepilot.core.AiCodeGeneratorFacade;
+import com.aih.pagepilot.core.handler.StreamHandlerExecutor;
 import com.aih.pagepilot.exception.ThrowUtils;
 import com.aih.pagepilot.model.enums.MessageTypeEnum;
 import com.aih.pagepilot.service.ChatHistoryService;
@@ -26,6 +27,7 @@ import com.aih.pagepilot.service.AppService;
 import com.aih.pagepilot.service.UserService;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
@@ -52,6 +54,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     private AiCodeGeneratorFacade aiCodeGeneratorFacade;
     @Resource
     private ChatHistoryService chatHistoryService;
+    @Autowired
+    private StreamHandlerExecutor streamHandlerExecutor;
 
     @Override
     public void validApp(App app, boolean add) {
@@ -210,25 +214,26 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         // 6. 调用 AI 生成代码（流式）
         Flux<String> contentFlux = aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appId);
         // 7. 收集AI响应内容并在完成后记录到对话历史
-        StringBuilder aiResponseBuilder = new StringBuilder();
-        return contentFlux
-                .map(chunk -> {
-                    // 收集AI响应内容
-                    aiResponseBuilder.append(chunk);
-                    return chunk;
-                })
-                .doOnComplete(() -> {
-                    // 流式响应完成后，添加AI消息到对话历史
-                    String aiResponse = aiResponseBuilder.toString();
-                    if (StrUtil.isNotBlank(aiResponse)) {
-                        chatHistoryService.addChatMessage(appId, aiResponse, MessageTypeEnum.AI.getValue(), loginUser.getId());
-                    }
-                })
-                .doOnError(error -> {
-                    // 如果AI回复失败，也要记录错误消息
-                    String errorMessage = "AI回复失败: " + error.getMessage();
-                    chatHistoryService.addChatMessage(appId, errorMessage, MessageTypeEnum.AI.getValue(), loginUser.getId());
-                });
+//        StringBuilder aiResponseBuilder = new StringBuilder();
+//        return contentFlux
+//                .map(chunk -> {
+//                    // 收集AI响应内容
+//                    aiResponseBuilder.append(chunk);
+//                    return chunk;
+//                })
+//                .doOnComplete(() -> {
+//                    // 流式响应完成后，添加AI消息到对话历史
+//                    String aiResponse = aiResponseBuilder.toString();
+//                    if (StrUtil.isNotBlank(aiResponse)) {
+//                        chatHistoryService.addChatMessage(appId, aiResponse, MessageTypeEnum.AI.getValue(), loginUser.getId());
+//                    }
+//                })
+//                .doOnError(error -> {
+//                    // 如果AI回复失败，也要记录错误消息
+//                    String errorMessage = "AI回复失败: " + error.getMessage();
+//                    chatHistoryService.addChatMessage(appId, errorMessage, MessageTypeEnum.AI.getValue(), loginUser.getId());
+//                });
+        return streamHandlerExecutor.doExecute(contentFlux, chatHistoryService, appId, loginUser, codeGenTypeEnum);
     }
 
     @Override

@@ -40,7 +40,7 @@ class AiCodeGeneratorFacadeTest {
     void generateVueProjectCodeStream() {
         Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeStream(
                 "todo任务清单，总代码量不超过 200 行",
-                CodeGenTypeEnum.VUE_PROJECT, 15L);
+                CodeGenTypeEnum.VUE_PROJECT, 21L);
         // 阻塞等待所有数据收集完成
         List<String> result = codeStream.collectList().block();
         // 验证结果
