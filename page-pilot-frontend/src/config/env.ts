@@ -1,3 +1,5 @@
+import { CODE_GEN_TYPE } from '@/constants/codeGenType'
+
 /**
  * 环境配置
  */
@@ -28,7 +30,12 @@ export const getDeployUrl = (deployKey: string): string => {
  * @returns 完整的预览URL
  */
 export const getPreviewUrl = (codeGenType: string, appId: string): string => {
-  return `${ENV_CONFIG.PREVIEW_DOMAIN}/api/static/${codeGenType}_${appId}/`
+  const baseUrl = `${ENV_CONFIG.PREVIEW_DOMAIN}/api/static/${codeGenType}_${appId}/`
+  // 如果是 Vue 项目，浏览地址需要添加 dist 后缀
+  if (codeGenType === CODE_GEN_TYPE.VUE_PROJECT) {
+    return `${baseUrl}dist/index.html`
+  }
+  return baseUrl
 }
 
 /**
