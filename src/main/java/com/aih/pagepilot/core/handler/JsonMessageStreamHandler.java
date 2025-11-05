@@ -9,9 +9,12 @@ import com.aih.pagepilot.ai.model.message.StreamMessage;
 import com.aih.pagepilot.ai.model.message.StreamMessageTypeEnum;
 import com.aih.pagepilot.ai.model.message.ToolExecutedMessage;
 import com.aih.pagepilot.ai.model.message.ToolRequestMessage;
+import com.aih.pagepilot.constant.AppConstant;
+import com.aih.pagepilot.core.builder.VueProjectBuilder;
 import com.aih.pagepilot.model.entity.User;
 import com.aih.pagepilot.model.enums.MessageTypeEnum;
 import com.aih.pagepilot.service.ChatHistoryService;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -26,6 +29,9 @@ import java.util.Set;
 @Slf4j
 @Component
 public class JsonMessageStreamHandler {
+
+    @Resource
+    private VueProjectBuilder vueProjectBuilder;
 
     /**
      * 处理 TokenStream（VUE_PROJECT）
@@ -55,6 +61,7 @@ public class JsonMessageStreamHandler {
                 .doOnComplete(() -> {
                     String aiResponse = chatHistoryStringBuilder.toString();
                     chatHistoryService.addChatMessage(appId, aiResponse, MessageTypeEnum.AI.getValue(), loginUser.getId());
+                    vueProjectBuilder.buildProjectAsync(AppConstant.CODE_OUTPUT_ROOT_DIR + "/vue_project_" + appId);
                 })
                 // 如果AI回复失败，也要记录错误消息
                 .doOnError(error -> {

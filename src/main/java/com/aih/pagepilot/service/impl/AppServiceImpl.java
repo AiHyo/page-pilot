@@ -7,6 +7,7 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import com.aih.pagepilot.ai.model.enums.CodeGenTypeEnum;
 import com.aih.pagepilot.core.AiCodeGeneratorFacade;
+import com.aih.pagepilot.core.builder.VueProjectBuilder;
 import com.aih.pagepilot.core.handler.StreamHandlerExecutor;
 import com.aih.pagepilot.exception.ThrowUtils;
 import com.aih.pagepilot.model.enums.MessageTypeEnum;
@@ -27,6 +28,7 @@ import com.aih.pagepilot.service.AppService;
 import com.aih.pagepilot.service.UserService;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -46,6 +48,7 @@ import java.util.stream.Collectors;
  * @since 2025-09-22
  */
 @Service
+@Slf4j
 public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppService {
 
     @Resource
@@ -56,6 +59,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     private ChatHistoryService chatHistoryService;
     @Autowired
     private StreamHandlerExecutor streamHandlerExecutor;
+    @Autowired
+    private VueProjectBuilder vueProjectBuilder;
 
     @Override
     public void validApp(App app, boolean add) {
@@ -262,6 +267,18 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         File sourceDir = new File(sourceDirPath);
         if (!sourceDir.exists() || !sourceDir.isDirectory()) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "应用代码不存在，请先生成代码");
+        }
+        // 如果是 vue 需要先构建出 dist 目录
+        CodeGenTypeEnum enumByValue = CodeGenTypeEnum.getEnumByValue(codeGenType);
+        if (enumByValue == CodeGenTypeEnum.VUE_PROJECT){
+            boolean isSuccess = vueProjectBuilder.buildProject(sourceDirPath);
+            ThrowUtils.throwIf(!isSuccess, ErrorCode.SYSTEM_ERROR, "构建项目失败");
+            // 检查 dist目录是否存在
+            File distDir = new File(sourceDirPath, "dist");
+            ThrowUtils.throwIf(!distDir.exists(), ErrorCode.SYSTEM_ERROR, "构建项目失败，dist目录不存在");
+            // dist 作为部署源
+            sourceDir = distDir;
+            log.info("Vue 项目构建成功，准备部署：{}", distDir.getAbsolutePath());
         }
         // 7. 复制文件到部署目录
         String deployDirPath = AppConstant.CODE_DEPLOY_ROOT_DIR + File.separator + deployKey;
