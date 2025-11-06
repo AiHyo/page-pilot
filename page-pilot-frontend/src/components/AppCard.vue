@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { getCodeGenTypeLabel } from '@/constants/codeGenType'
 
 interface Props {
   app: API.AppVO
@@ -54,6 +55,10 @@ const visibleActions = computed(() => {
         />
         <div v-else class="default-cover">
           📄
+        </div>
+        <!-- 生成类型标签 -->
+        <div v-if="app.codeGenType" class="code-type-badge">
+          {{ getCodeGenTypeLabel(app.codeGenType) }}
         </div>
       </div>
     </template>
@@ -113,6 +118,7 @@ const visibleActions = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
 }
 
 .cover-image {
@@ -124,6 +130,21 @@ const visibleActions = computed(() => {
 .default-cover {
   font-size: 48px;
   color: #ccc;
+}
+
+.code-type-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(114, 46, 209, 0.9);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 1;
 }
 
 .featured-title {

@@ -108,8 +108,11 @@ const handleDelete = async () => {
             <span class="info-value">{{ app.createTime }}</span>
           </div>
           <div class="info-item">
-            <span class="info-label">代码类型：</span>
-            <span class="info-value">{{ app.codeGenType ? getCodeGenTypeLabel(app.codeGenType) : '未设置' }}</span>
+            <span class="info-label">生成类型：</span>
+            <a-tag v-if="app.codeGenType" color="purple" class="code-type-tag">
+              {{ getCodeGenTypeLabel(app.codeGenType) }}
+            </a-tag>
+            <span v-else class="info-value">未设置</span>
           </div>
           <div class="info-item">
             <span class="info-label">部署状态：</span>
@@ -212,5 +215,12 @@ const handleDelete = async () => {
 .operation-buttons {
   display: flex;
   gap: 12px;
+}
+
+.code-type-tag {
+  font-weight: 500;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 13px;
 }
 </style>

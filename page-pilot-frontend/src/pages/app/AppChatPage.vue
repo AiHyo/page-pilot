@@ -454,6 +454,9 @@ onMounted(() => {
               </a-menu>
             </template>
           </a-dropdown>
+          <a-tag v-if="app?.codeGenType" color="purple" class="code-type-tag">
+            {{ getCodeGenTypeLabel(app.codeGenType) }}
+          </a-tag>
         </div>
         <div class="top-actions">
           <a-button @click="showAppDetail">
@@ -729,6 +732,12 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
+.app-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .app-selector {
   display: flex;
   align-items: center;
@@ -739,6 +748,13 @@ onMounted(() => {
 
 .app-icon {
   font-size: 20px;
+}
+
+.code-type-tag {
+  font-weight: 500;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 13px;
 }
 
 .top-actions {
