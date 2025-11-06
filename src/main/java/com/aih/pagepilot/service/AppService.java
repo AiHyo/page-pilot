@@ -1,5 +1,6 @@
 package com.aih.pagepilot.service;
 
+import com.aih.pagepilot.model.dto.AppAddRequest;
 import com.aih.pagepilot.model.entity.User;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
@@ -72,4 +73,6 @@ public interface AppService extends IService<App> {
     Flux<String> chatToGenCode(Long appId, String message, User loginUser);
 
     String deployApp(Long appId, User loginUser);
+
+    Long createApp(AppAddRequest appAddRequest, User loginUser);
 }

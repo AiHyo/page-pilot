@@ -5,11 +5,15 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
+import com.aih.pagepilot.ai.AiCodeGenTypeRoutingService;
+import com.aih.pagepilot.ai.AiCodeGeneratorService;
 import com.aih.pagepilot.ai.model.enums.CodeGenTypeEnum;
+import com.aih.pagepilot.common.ResultUtils;
 import com.aih.pagepilot.core.AiCodeGeneratorFacade;
 import com.aih.pagepilot.core.builder.VueProjectBuilder;
 import com.aih.pagepilot.core.handler.StreamHandlerExecutor;
 import com.aih.pagepilot.exception.ThrowUtils;
+import com.aih.pagepilot.model.dto.AppAddRequest;
 import com.aih.pagepilot.model.enums.MessageTypeEnum;
 import com.aih.pagepilot.service.ChatHistoryService;
 import com.aih.pagepilot.service.ScreenshotService;
@@ -59,14 +63,18 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     private AiCodeGeneratorFacade aiCodeGeneratorFacade;
     @Resource
     private ChatHistoryService chatHistoryService;
-    @Autowired
+    @Resource
     private StreamHandlerExecutor streamHandlerExecutor;
-    @Autowired
+    @Resource
     private VueProjectBuilder vueProjectBuilder;
     @Resource
     private ScreenshotService screenshotService;
     @Autowired
     private AppMapper appMapper;
+    @Resource
+    private AiCodeGeneratorService aiCodeGeneratorService;
+    @Resource
+    private AiCodeGenTypeRoutingService aiCodeGenTypeRoutingService;
 
     @Override
     public void validApp(App app, boolean add) {
@@ -305,6 +313,26 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         generateAppScreenshotAsync(appId, appDeployUrl);
         return appDeployUrl;
 
+    }
+
+    @Override
+    public Long createApp(AppAddRequest appAddRequest, User loginUser) {
+        App app = new App();
+        BeanUtil.copyProperties(appAddRequest, app);
+        // 设置默认优先级
+        app.setPriority(AppConstant.DEFAULT_APP_PRIORITY);
+        // 参数校验
+        validApp(app, true);
+        app.setUserId(loginUser.getId());
+        // 应用名称暂时为 initPrompt 前 12 位
+        app.setAppName(appAddRequest.getInitPrompt().substring(0, Math.min(appAddRequest.getInitPrompt().length(), 12)));
+        // 智能路由选择代码生成类型
+        CodeGenTypeEnum typeEnum = aiCodeGenTypeRoutingService.routeCodeGenType(app.getInitPrompt());
+        app.setCodeGenType(typeEnum.getValue());
+        boolean result = save(app);
+        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
+        log.info("应用创建成功, ID: {}, 类型: {}", app.getId(), app.getCodeGenType());
+        return app.getId();
     }
 
     /**

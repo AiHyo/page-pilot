@@ -75,27 +75,8 @@ public class AppController {
     @PostMapping
     public BaseResponse<Long> addApp(@RequestBody AppAddRequest appAddRequest, HttpServletRequest request) {
         ThrowUtils.throwIf(appAddRequest == null, ErrorCode.PARAMS_ERROR);
-        
-        App app = new App();
-        BeanUtil.copyProperties(appAddRequest, app);
-        
-        // 设置默认优先级
-        app.setPriority(AppConstant.DEFAULT_APP_PRIORITY);
-        
-        // 参数校验
-        appService.validApp(app, true);
-        
-        // 获取当前登录用户
         User loginUser = userService.getLoginUser(request);
-        app.setUserId(loginUser.getId());
-        // 应用名称暂时为 initPrompt 前 12 位
-        app.setAppName(appAddRequest.getInitPrompt().substring(0, Math.min(appAddRequest.getInitPrompt().length(), 12)));
-        // 暂时设置为VUE生成
-        app.setCodeGenType(CodeGenTypeEnum.VUE_PROJECT.getValue());
-        
-        boolean result = appService.save(app);
-        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
-        return ResultUtils.success(app.getId());
+        return ResultUtils.success(appService.createApp(appAddRequest, loginUser));
     }
 
     /**

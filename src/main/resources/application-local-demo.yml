@@ -11,8 +11,8 @@ langchain4j:
       log-requests: true
       log-responses: true
       # 结构化输出
-      supported-capabilities: response_format_json_schema
-      strict-json-schema: true
+#      supported-capabilities: response_format_json_schema
+#      strict-json-schema: true
       #      response-format: json_object     # 官方 deepseek - api 的结构化输出配置
       max-tokens: 8192 # 最大输出长度    # 官方 deepseek - api 的结构化输出配置
       timeout: 30000 # 超时时间，单位秒
