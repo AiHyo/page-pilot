@@ -11,6 +11,7 @@ import { getPreviewUrl } from '@/config/env'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import AppDetailModal from '@/components/AppDetailModal.vue'
 import aiAvatarUrl from '@/assets/aiAvatar.png'
+import myAxios from '@/request'
 
 const route = useRoute()
 const router = useRouter()
@@ -22,6 +23,7 @@ const appId = route.params.id as string
 const app = ref<API.AppVO>()
 const loading = ref(false)
 const deploying = ref(false)
+const downloading = ref(false)
 
 const messages = ref<Array<{
   id: string
@@ -320,6 +322,57 @@ const handleDeploy = async () => {
   }
 }
 
+// 下载应用代码
+const handleDownload = async () => {
+  if (!generationComplete.value) {
+    message.warning('请等待代码生成完成后再下载')
+    return
+  }
+
+  downloading.value = true
+  try {
+    const response = await myAxios.get(`/app/download/${appId}`, {
+      responseType: 'blob'
+    })
+    
+    // 从响应头获取文件名
+    const contentDisposition = response.headers['content-disposition']
+    let fileName = `${appId}.zip`
+    if (contentDisposition) {
+      const fileNameMatch = contentDisposition.match(/filename="?(.+)"?/)
+      if (fileNameMatch && fileNameMatch[1]) {
+        fileName = fileNameMatch[1]
+      }
+    }
+    
+    // 创建下载链接
+    const blob = new Blob([response.data], { type: 'application/zip' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = fileName
+    document.body.appendChild(link)
+    link.click()
+    
+    // 清理
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    
+    message.success('代码下载成功！')
+  } catch (error: any) {
+    console.error('下载失败:', error)
+    if (error.response?.status === 404) {
+      message.error('应用代码不存在，请先生成代码')
+    } else if (error.response?.status === 403) {
+      message.error('无权限下载该应用代码')
+    } else {
+      message.error('下载失败，请重试')
+    }
+  } finally {
+    downloading.value = false
+  }
+}
+
 // 显示应用详情
 const showAppDetail = () => {
   detailModalVisible.value = true
@@ -405,6 +458,14 @@ onMounted(() => {
         <div class="top-actions">
           <a-button @click="showAppDetail">
             应用详情
+          </a-button>
+          <a-button
+            :loading="downloading"
+            :disabled="!generationComplete || !isOwner"
+            @click="handleDownload"
+          >
+            <template #icon>📥</template>
+            下载代码
           </a-button>
           <a-button
             type="primary"
