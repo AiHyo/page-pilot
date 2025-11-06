@@ -12,6 +12,7 @@ import com.aih.pagepilot.core.handler.StreamHandlerExecutor;
 import com.aih.pagepilot.exception.ThrowUtils;
 import com.aih.pagepilot.model.enums.MessageTypeEnum;
 import com.aih.pagepilot.service.ChatHistoryService;
+import com.aih.pagepilot.service.ScreenshotService;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.aih.pagepilot.constant.AppConstant;
@@ -34,6 +35,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
 import java.io.File;
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -61,6 +63,10 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     private StreamHandlerExecutor streamHandlerExecutor;
     @Autowired
     private VueProjectBuilder vueProjectBuilder;
+    @Resource
+    private ScreenshotService screenshotService;
+    @Autowired
+    private AppMapper appMapper;
 
     @Override
     public void validApp(App app, boolean add) {
@@ -249,13 +255,12 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         // 2. 查询应用信息
         App app = this.getById(appId);
         ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
-        // 3. 验证用户是否有权限部署该应用，仅本人可以部署
+        // 3. 仅本人可以部署
         if (!app.getUserId().equals(loginUser.getId())) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限部署该应用");
         }
-        // 4. 检查是否已有 deployKey
+        // 4. 检查是否已有 deployKey，6位大小写字母+数字
         String deployKey = app.getDeployKey();
-        // 没有则生成 6 位 deployKey（大小写字母 + 数字）
         if (StrUtil.isBlank(deployKey)) {
             deployKey = RandomUtil.randomString(6);
         }
@@ -281,9 +286,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             log.info("Vue 项目构建成功，准备部署：{}", distDir.getAbsolutePath());
         }
         // 7. 复制文件到部署目录
-        String deployDirPath = AppConstant.CODE_DEPLOY_ROOT_DIR + File.separator + deployKey;
+        String targetDir = AppConstant.CODE_DEPLOY_ROOT_DIR + File.separator + deployKey;
         try {
-            FileUtil.copyContent(sourceDir, new File(deployDirPath), true);
+            FileUtil.copyContent(sourceDir, new File(targetDir), true);
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "部署失败：" + e.getMessage());
         }
@@ -294,8 +299,29 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         updateApp.setDeployedTime(LocalDateTime.now());
         boolean updateResult = this.updateById(updateApp);
         ThrowUtils.throwIf(!updateResult, ErrorCode.OPERATION_ERROR, "更新应用部署信息失败");
-        // 9. 返回可访问的 URL
-        return String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
+        // 9. 构建应用访问 URL
+        String appDeployUrl = String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
+        // 10. 异步生成截图并更新应用封面
+        generateAppScreenshotAsync(appId, appDeployUrl);
+        return appDeployUrl;
+
+    }
+
+    /**
+     * 异步生成应用截图并更新应用封面
+     * @param appId 应用ID
+     * @param appDeployUrl 应用部署URL
+     */
+    private void generateAppScreenshotAsync(Long appId, String appDeployUrl) {
+        Thread.ofVirtual().start(()->{
+            try {
+                String screenshotUrl = screenshotService.generateAndUploadScreenshot(appDeployUrl);
+                App app = App.builder().cover(screenshotUrl).id(appId).build();
+                updateById(app);
+            } catch (IOException e) {
+                log.error("生成应用截图失败: {}", e.getMessage(), e);
+            }
+        });
     }
 
 
