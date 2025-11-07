@@ -21,6 +21,11 @@ export default defineConfig({
         target: 'http://localhost:8123',
         changeOrigin: true,
         ws: true, // 支持websocket和SSE
+      },
+      // 代理生成的网站静态资源
+      '/generated': {
+        target: 'http://localhost:8123',
+        changeOrigin: true,
       }
     }
   }

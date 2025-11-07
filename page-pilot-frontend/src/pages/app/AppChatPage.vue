@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { DownOutlined } from '@ant-design/icons-vue'
@@ -12,6 +12,7 @@ import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import AppDetailModal from '@/components/AppDetailModal.vue'
 import aiAvatarUrl from '@/assets/aiAvatar.png'
 import myAxios from '@/request'
+import { VisualEditorManager, type ElementInfo, type EditorMessage, MessageType } from '@/utils/visualEditor'
 
 const route = useRoute()
 const router = useRouter()
@@ -56,6 +57,12 @@ const detailModalVisible = ref(false)
 const chatMessagesRef = ref<HTMLElement>()
 const userHasScrolled = ref(false)
 const isAtBottom = ref(true)
+
+// 可视化编辑相关
+const isEditMode = ref(false)
+const selectedElement = ref<ElementInfo | null>(null)
+const visualEditorManager = ref<VisualEditorManager | null>(null)
+const previewIframeRef = ref<HTMLIFrameElement | null>(null)
 
 // 加载历史消息
 const loadHistoryMessages = async () => {
@@ -182,8 +189,14 @@ const loadApp = async () => {
 const sendMessage = async (content: string, isInitial = false) => {
   if (!content.trim() && !isInitial) return
 
-  const messageContent = isInitial ? content : userInput.value.trim()
+  let messageContent = isInitial ? content : userInput.value.trim()
   if (!messageContent) return
+  
+  // 如果有选中元素，添加元素上下文
+  if (selectedElement.value && !isInitial) {
+    const elementContext = formatElementContext(selectedElement.value)
+    messageContent = `${elementContext}\n\n${messageContent}`
+  }
 
   // 添加用户消息
   const userMessage = {
@@ -282,6 +295,12 @@ const sendMessage = async (content: string, isInitial = false) => {
           } catch (error) {
             console.error('保存AI消息失败:', error)
           }
+        }
+        
+        // 如果有选中元素，清除选中状态并退出编辑模式
+        if (selectedElement.value) {
+          clearSelectedElement()
+          exitEditMode()
         }
       }
     })
@@ -429,8 +448,159 @@ const handleKeyDown = (event: KeyboardEvent) => {
   }
 }
 
+// 可视化编辑相关方法
+const toggleEditMode = () => {
+  try {
+    if (isEditMode.value) {
+      exitEditMode()
+    } else {
+      enterEditMode()
+    }
+  } catch (error) {
+    console.error('[AppChatPage] Error toggling edit mode:', error)
+    message.error('切换编辑模式失败')
+  }
+}
+
+const enterEditMode = () => {
+  try {
+    if (!isOwner.value) {
+      message.warning('仅应用所有者可以使用编辑模式')
+      return
+    }
+    
+    if (!generationComplete.value) {
+      message.warning('请等待代码生成完成后再使用编辑模式')
+      return
+    }
+    
+    if (!visualEditorManager.value) {
+      message.error('可视化编辑器未初始化，请刷新页面重试')
+      console.error('[AppChatPage] Visual editor manager not initialized')
+      return
+    }
+    
+    isEditMode.value = true
+    visualEditorManager.value.enterEditMode()
+    message.info('已进入编辑模式，点击预览网站中的元素进行选择')
+    console.log('[AppChatPage] Entered edit mode')
+  } catch (error) {
+    console.error('[AppChatPage] Error entering edit mode:', error)
+    message.error('进入编辑模式失败')
+    isEditMode.value = false
+  }
+}
+
+const exitEditMode = () => {
+  try {
+    isEditMode.value = false
+    visualEditorManager.value?.exitEditMode()
+    clearSelectedElement()
+    console.log('[AppChatPage] Exited edit mode')
+  } catch (error) {
+    console.error('[AppChatPage] Error exiting edit mode:', error)
+    message.error('退出编辑模式失败')
+  }
+}
+
+const handleElementSelected = (element: ElementInfo) => {
+  try {
+    selectedElement.value = element
+    console.log('[AppChatPage] Element selected:', element)
+  } catch (error) {
+    console.error('[AppChatPage] Error handling element selection:', error)
+    message.error('处理元素选择失败')
+  }
+}
+
+const clearSelectedElement = () => {
+  try {
+    selectedElement.value = null
+    visualEditorManager.value?.clearSelection()
+    console.log('[AppChatPage] Cleared selected element')
+  } catch (error) {
+    console.error('[AppChatPage] Error clearing selected element:', error)
+  }
+}
+
+const formatElementContext = (element: ElementInfo): string => {
+  const parts = []
+  
+  if (element.tagName) {
+    parts.push(`标签: ${element.tagName}`)
+  }
+  
+  if (element.className) {
+    parts.push(`类名: ${element.className}`)
+  }
+  
+  if (element.id) {
+    parts.push(`ID: ${element.id}`)
+  }
+  
+  if (element.textContent) {
+    const content = element.textContent.substring(0, 50)
+    parts.push(`内容: "${content}${element.textContent.length > 50 ? '...' : ''}"`)
+  }
+  
+  return `[编辑元素] ${parts.join(', ')}`
+}
+
+const handleEditorMessage = (message: EditorMessage) => {
+  try {
+    if (message.type === MessageType.ELEMENT_SELECTED && message.data) {
+      handleElementSelected(message.data)
+    }
+  } catch (error) {
+    console.error('[AppChatPage] Error handling editor message:', error)
+    message.error('处理元素选择消息失败')
+  }
+}
+
+// 初始化可视化编辑器
+const initVisualEditor = () => {
+  try {
+    if (previewIframeRef.value) {
+      console.log('[AppChatPage] Initializing visual editor...')
+      visualEditorManager.value = new VisualEditorManager()
+      visualEditorManager.value.init(previewIframeRef.value, handleEditorMessage)
+      console.log('[AppChatPage] Visual editor initialized successfully')
+    } else {
+      console.warn('[AppChatPage] Preview iframe not found, visual editor not initialized')
+    }
+  } catch (error) {
+    console.error('[AppChatPage] Failed to initialize visual editor:', error)
+    message.error('可视化编辑器初始化失败')
+  }
+}
+
 onMounted(() => {
   loadApp()
+  
+  // 监听 showPreview 的变化，当预览显示时初始化编辑器
+  // 使用 watch 而不是 setTimeout 更可靠
+  const stopWatch = watch(showPreview, (newValue) => {
+    if (newValue) {
+      console.log('[AppChatPage] Preview shown, waiting for iframe to load...')
+      // 等待 iframe 加载
+      nextTick(() => {
+        setTimeout(() => {
+          initVisualEditor()
+          stopWatch() // 停止监听
+        }, 2000) // 增加到 2 秒，确保 iframe 完全加载
+      })
+    }
+  }, { immediate: true })
+})
+
+onUnmounted(() => {
+  // 清理可视化编辑器
+  try {
+    visualEditorManager.value?.destroy()
+    console.log('[AppChatPage] Visual editor destroyed')
+  } catch (error) {
+    console.error('[AppChatPage] Error destroying visual editor:', error)
+  }
 })
 </script>
 
@@ -569,6 +739,28 @@ onMounted(() => {
               </div>
             </div>
 
+            <!-- 选中元素提示 -->
+            <a-alert
+              v-if="selectedElement"
+              type="info"
+              closable
+              @close="clearSelectedElement"
+              class="selected-element-alert"
+            >
+              <template #message>
+                <div class="selected-element-info">
+                  <span class="element-label">已选中元素:</span>
+                  <span class="element-tag">&lt;{{ selectedElement.tagName.toLowerCase() }}</span>
+                  <span v-if="selectedElement.className" class="element-class">class="{{ selectedElement.className }}"</span>
+                  <span v-if="selectedElement.id" class="element-id">id="{{ selectedElement.id }}"</span>
+                  <span class="element-tag">&gt;</span>
+                  <span v-if="selectedElement.textContent" class="element-text">
+                    - "{{ selectedElement.textContent.substring(0, 30) }}{{ selectedElement.textContent.length > 30 ? '...' : '' }}"
+                  </span>
+                </div>
+              </template>
+            </a-alert>
+
             <a-tooltip 
               v-if="!isOwner"
               title="无法在别人的作品下对话哦~"
@@ -595,6 +787,18 @@ onMounted(() => {
             />
             <div class="input-actions">
               <div class="left-actions">
+                <a-tooltip :title="isEditMode ? '退出编辑模式' : ((!isOwner) ? '仅应用所有者可编辑' : (!generationComplete) ? '请等待代码生成完成' : '进入编辑模式')">
+                  <a-button 
+                    type="text" 
+                    size="small" 
+                    :disabled="!isOwner || !generationComplete"
+                    :class="{ 'edit-mode-active': isEditMode }"
+                    @click="toggleEditMode"
+                    class="edit-mode-btn"
+                  >
+                    {{ isEditMode ? '🎨 编辑中' : '✏️ 编辑' }}
+                  </a-button>
+                </a-tooltip>
                 <a-button type="text" size="small" :disabled="!isOwner">📎 上传</a-button>
                 <a-button type="text" size="small" :disabled="!isOwner">💾 保存</a-button>
                 <a-button type="text" size="small" :disabled="!isOwner">💬 历史</a-button>
@@ -688,6 +892,7 @@ onMounted(() => {
 
             <iframe
               v-if="showPreview"
+              ref="previewIframeRef"
               :src="previewUrl"
               class="preview-iframe"
               frameborder="0"
@@ -1242,6 +1447,88 @@ onMounted(() => {
 
 .disabled-input:hover {
   border-color: #d9d9d9 !important;
+}
+
+/* 可视化编辑相关样式 */
+.selected-element-alert {
+  margin-bottom: 12px;
+  animation: slideInDown 0.3s ease-out;
+}
+
+@keyframes slideInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.selected-element-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+}
+
+.element-label {
+  font-weight: 600;
+  color: #1890ff;
+  margin-right: 4px;
+}
+
+.element-tag {
+  color: #cf222e;
+  font-weight: 500;
+}
+
+.element-class {
+  color: #0969da;
+}
+
+.element-id {
+  color: #8250df;
+}
+
+.element-text {
+  color: #57606a;
+  font-style: italic;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.edit-mode-btn {
+  transition: all 0.3s ease;
+}
+
+.edit-mode-btn:not(:disabled):hover {
+  color: #1890ff !important;
+  background-color: #e6f7ff !important;
+}
+
+.edit-mode-active {
+  color: #1890ff !important;
+  background-color: #e6f7ff !important;
+  font-weight: 600;
+}
+
+.edit-mode-active:not(:disabled) {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
 }
 
 </style>

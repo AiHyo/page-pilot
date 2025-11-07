@@ -30,7 +30,12 @@ export const getDeployUrl = (deployKey: string): string => {
  * @returns 完整的预览URL
  */
 export const getPreviewUrl = (codeGenType: string, appId: string): string => {
-  const baseUrl = `${ENV_CONFIG.PREVIEW_DOMAIN}/api/static/${codeGenType}_${appId}/`
+  // 如果 PREVIEW_DOMAIN 不包含端口号（即使用代理），则使用相对路径
+  const isUsingProxy = !ENV_CONFIG.PREVIEW_DOMAIN.includes(':8123')
+  const baseUrl = isUsingProxy 
+    ? `/api/static/${codeGenType}_${appId}/`
+    : `${ENV_CONFIG.PREVIEW_DOMAIN}/api/static/${codeGenType}_${appId}/`
+  
   // 如果是 Vue 项目，浏览地址需要添加 dist 后缀
   if (codeGenType === CODE_GEN_TYPE.VUE_PROJECT) {
     return `${baseUrl}dist/index.html`
