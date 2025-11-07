@@ -32,7 +32,7 @@ const messages = ref<Array<{
   content: string
   timestamp: string
   createTime?: string
-}>>([])  
+}>>([])
 const userInput = ref('')
 const isGenerating = ref(false)
 const generationComplete = ref(false)
@@ -67,7 +67,7 @@ const previewIframeRef = ref<HTMLIFrameElement | null>(null)
 // 加载历史消息
 const loadHistoryMessages = async () => {
   if (historyLoaded.value) return
-  
+
   historyLoading.value = true
   try {
     const res = await getLatestChatHistory({ appId: appId as any, limit: 10 })
@@ -79,27 +79,27 @@ const loadHistoryMessages = async () => {
         timestamp: new Date(item.createTime || '').toLocaleTimeString(),
         createTime: item.createTime
       }))
-      
+
       // 按时间升序排列
       historyMessages.sort((a, b) => new Date(a.createTime || '').getTime() - new Date(b.createTime || '').getTime())
-      
+
       messages.value = historyMessages
-      
+
       // 设置最早的消息时间用于分页
       if (historyMessages.length > 0) {
         lastCreateTime.value = historyMessages[0].createTime
         hasMoreHistory.value = historyMessages.length >= 10
       }
-      
+
       historyLoaded.value = true
-      
+
       // 如果有历史消息且消息数量>=2，显示预览
       if (historyMessages.length >= 2) {
         showPreview.value = true
         previewUrl.value = getPreviewUrl(app.value?.codeGenType || '', appId)
         generationComplete.value = true
       }
-      
+
       // 滚动到底部
       nextTick(() => {
         scrollToBottom(true)
@@ -115,15 +115,15 @@ const loadHistoryMessages = async () => {
 // 加载更多历史消息
 const loadMoreHistory = async () => {
   if (historyLoading.value || !hasMoreHistory.value || !lastCreateTime.value) return
-  
+
   historyLoading.value = true
   try {
-    const res = await listAppChatHistory({ 
-      appId: appId as any, 
+    const res = await listAppChatHistory({
+      appId: appId as any,
       pageSize: 10,
       lastCreateTime: lastCreateTime.value
     })
-    
+
     if (res.data.code === 0 && res.data.data?.records) {
       const newMessages = res.data.data.records.map((item: API.ChatHistory) => ({
         id: item.id?.toString() || Date.now().toString(),
@@ -132,13 +132,13 @@ const loadMoreHistory = async () => {
         timestamp: new Date(item.createTime || '').toLocaleTimeString(),
         createTime: item.createTime
       }))
-      
+
       // 按时间升序排列
       newMessages.sort((a, b) => new Date(a.createTime || '').getTime() - new Date(b.createTime || '').getTime())
-      
+
       // 添加到消息列表开头
       messages.value = [...newMessages, ...messages.value]
-      
+
       // 更新分页信息
       if (newMessages.length > 0) {
         lastCreateTime.value = newMessages[0].createTime
@@ -162,13 +162,13 @@ const loadApp = async () => {
     const res = await getAppVoById({ id: appId as any })
     if (res.data.code === 0 && res.data.data) {
       app.value = res.data.data
-      
+
       // 检查是否为应用所有者
       isOwner.value = app.value.userId === loginUserStore.loginUser.id
-      
+
       // 先加载历史消息
       await loadHistoryMessages()
-      
+
       // 只有在是自己的应用且没有对话历史时才自动发送初始消息
       if (isOwner.value && messages.value.length === 0 && app.value.initPrompt) {
         await sendMessage(app.value.initPrompt, true)
@@ -191,7 +191,7 @@ const sendMessage = async (content: string, isInitial = false) => {
 
   let messageContent = isInitial ? content : userInput.value.trim()
   if (!messageContent) return
-  
+
   // 如果有选中元素，添加元素上下文
   if (selectedElement.value && !isInitial) {
     const elementContext = formatElementContext(selectedElement.value)
@@ -206,11 +206,11 @@ const sendMessage = async (content: string, isInitial = false) => {
     timestamp: new Date().toLocaleTimeString(),
     createTime: new Date().toISOString()
   }
-  
+
   if (!isInitial) {
     messages.value.push(userMessage)
     scrollToBottom()
-    
+
     // 保存用户消息到后端
     try {
       await addChatHistory({
@@ -252,9 +252,9 @@ const sendMessage = async (content: string, isInitial = false) => {
           // 先检查当前滚动状态
           checkIfAtBottom()
           const wasAtBottom = isAtBottom.value
-          
+
           aiMessage.content += data.data
-          
+
           // 如果用户在底部或者没有手动滚动过，则自动滚动
           if (wasAtBottom || !userHasScrolled.value) {
             // 使用双重nextTick确保DOM更新完成
@@ -282,21 +282,21 @@ const sendMessage = async (content: string, isInitial = false) => {
         showPreview.value = true
         previewUrl.value = getPreviewUrl(app.value?.codeGenType || '', appId)
         message.success('代码生成完成！')
-        
+
         // 保存AI消息到后端
         const aiMessage = messages.value.find(msg => msg.id === aiMessageId)
         if (aiMessage && aiMessage.content) {
           try {
             addChatHistory({
               message: aiMessage.content,
-              messageType: 'AI',
+              messageType: 'ai',
               appId: appId as any
             })
           } catch (error) {
             console.error('保存AI消息失败:', error)
           }
         }
-        
+
         // 如果有选中元素，清除选中状态并退出编辑模式
         if (selectedElement.value) {
           clearSelectedElement()
@@ -353,7 +353,7 @@ const handleDownload = async () => {
     const response = await myAxios.get(`/app/download/${appId}`, {
       responseType: 'blob'
     })
-    
+
     // 从响应头获取文件名
     const contentDisposition = response.headers['content-disposition']
     let fileName = `${appId}.zip`
@@ -363,7 +363,7 @@ const handleDownload = async () => {
         fileName = fileNameMatch[1]
       }
     }
-    
+
     // 创建下载链接
     const blob = new Blob([response.data], { type: 'application/zip' })
     const url = window.URL.createObjectURL(blob)
@@ -372,11 +372,11 @@ const handleDownload = async () => {
     link.download = fileName
     document.body.appendChild(link)
     link.click()
-    
+
     // 清理
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
-    
+
     message.success('代码下载成功！')
   } catch (error: any) {
     console.error('下载失败:', error)
@@ -468,18 +468,18 @@ const enterEditMode = () => {
       message.warning('仅应用所有者可以使用编辑模式')
       return
     }
-    
+
     if (!generationComplete.value) {
       message.warning('请等待代码生成完成后再使用编辑模式')
       return
     }
-    
+
     if (!visualEditorManager.value) {
       message.error('可视化编辑器未初始化，请刷新页面重试')
       console.error('[AppChatPage] Visual editor manager not initialized')
       return
     }
-    
+
     isEditMode.value = true
     visualEditorManager.value.enterEditMode()
     message.info('已进入编辑模式，点击预览网站中的元素进行选择')
@@ -525,24 +525,24 @@ const clearSelectedElement = () => {
 
 const formatElementContext = (element: ElementInfo): string => {
   const parts = []
-  
+
   if (element.tagName) {
     parts.push(`标签: ${element.tagName}`)
   }
-  
+
   if (element.className) {
     parts.push(`类名: ${element.className}`)
   }
-  
+
   if (element.id) {
     parts.push(`ID: ${element.id}`)
   }
-  
+
   if (element.textContent) {
     const content = element.textContent.substring(0, 50)
     parts.push(`内容: "${content}${element.textContent.length > 50 ? '...' : ''}"`)
   }
-  
+
   return `[编辑元素] ${parts.join(', ')}`
 }
 
@@ -576,7 +576,7 @@ const initVisualEditor = () => {
 
 onMounted(() => {
   loadApp()
-  
+
   // 监听 showPreview 的变化，当预览显示时初始化编辑器
   // 使用 watch 而不是 setTimeout 更可靠
   const stopWatch = watch(showPreview, (newValue) => {
@@ -664,18 +664,18 @@ onUnmounted(() => {
           </div>
 
           <!-- 消息列表 -->
-          <div 
+          <div
             ref="chatMessagesRef"
             class="chat-messages"
             @scroll="handleScroll"
           >
             <!-- 加载更多历史消息按钮 -->
-            <div 
-              v-if="hasMoreHistory && historyLoaded && messages.length > 0" 
+            <div
+              v-if="hasMoreHistory && historyLoaded && messages.length > 0"
               class="load-more-container"
             >
-              <a-button 
-                type="dashed" 
+              <a-button
+                type="dashed"
                 :loading="historyLoading"
                 @click="loadMoreHistory"
                 class="load-more-btn"
@@ -701,9 +701,9 @@ onUnmounted(() => {
                 <span class="message-time">{{ msg.timestamp }}</span>
               </div>
               <div class="message-content">
-                <MarkdownRenderer 
-                  v-if="msg.type === 'ai'" 
-                  :content="msg.content" 
+                <MarkdownRenderer
+                  v-if="msg.type === 'ai'"
+                  :content="msg.content"
                   class="ai-content"
                 />
                 <div v-else class="user-content">{{ msg.content }}</div>
@@ -713,8 +713,8 @@ onUnmounted(() => {
             <!-- 移除原有的生成中提示，改为在输入框区域显示 -->
 
             <!-- 滚动到底部按钮 -->
-            <div 
-              v-if="userHasScrolled && !isAtBottom" 
+            <div
+              v-if="userHasScrolled && !isAtBottom"
               class="scroll-to-bottom"
               @click="scrollToBottom(true)"
             >
@@ -761,7 +761,7 @@ onUnmounted(() => {
               </template>
             </a-alert>
 
-            <a-tooltip 
+            <a-tooltip
               v-if="!isOwner"
               title="无法在别人的作品下对话哦~"
               placement="top"
@@ -788,9 +788,9 @@ onUnmounted(() => {
             <div class="input-actions">
               <div class="left-actions">
                 <a-tooltip :title="isEditMode ? '退出编辑模式' : ((!isOwner) ? '仅应用所有者可编辑' : (!generationComplete) ? '请等待代码生成完成' : '进入编辑模式')">
-                  <a-button 
-                    type="text" 
-                    size="small" 
+                  <a-button
+                    type="text"
+                    size="small"
                     :disabled="!isOwner || !generationComplete"
                     :class="{ 'edit-mode-active': isEditMode }"
                     @click="toggleEditMode"
