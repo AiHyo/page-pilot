@@ -1,7 +1,7 @@
 package com.aih.pagepilot.ai;
 
 import com.aih.pagepilot.ai.model.enums.CodeGenTypeEnum;
-import com.aih.pagepilot.ai.tools.FileWriteTool;
+import com.aih.pagepilot.ai.tools.ToolManager;
 import com.aih.pagepilot.exception.BusinessException;
 import com.aih.pagepilot.exception.ErrorCode;
 import com.aih.pagepilot.service.ChatHistoryService;
@@ -46,6 +46,9 @@ public class AiCodeGeneratorServiceFactory {
 
     @Resource
     private ChatHistoryService chatHistoryService;
+
+    @Resource
+    private ToolManager toolManager;
 
     /**
      * AI 服务实例缓存
@@ -116,10 +119,12 @@ public class AiCodeGeneratorServiceFactory {
         return switch (codeGenType) {
             // Vue 项目生成使用推理模型
             case VUE_PROJECT -> AiServices.builder(AiCodeGeneratorService.class)
-                    .chatModel(chatModel)
                     .streamingChatModel(reasoningStreamingChatModel)
                     .chatMemoryProvider(memoryId -> chatMemory)
-                    .tools(new FileWriteTool())
+                    .tools(toolManager.getAllTools())
+                    .hallucinatedToolNameStrategy(toolExecutionRequest -> ToolExecutionResultMessage.from(
+                            toolExecutionRequest, "Error: there is no tool called " + toolExecutionRequest.name()
+                    ))
                     .build();
             // HTML 和多文件生成使用默认模型
             case HTML, MULTI_FILE -> AiServices.builder(AiCodeGeneratorService.class)
