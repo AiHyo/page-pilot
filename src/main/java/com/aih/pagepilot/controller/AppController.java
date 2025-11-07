@@ -3,7 +3,6 @@ package com.aih.pagepilot.controller;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
-import com.aih.pagepilot.ai.model.enums.CodeGenTypeEnum;
 import com.aih.pagepilot.annotation.AuthCheck;
 import com.aih.pagepilot.common.BaseResponse;
 import com.aih.pagepilot.common.ResultUtils;
@@ -24,8 +23,7 @@ import com.aih.pagepilot.service.ProjectDownloadService;
 import com.aih.pagepilot.service.UserService;
 import com.mybatisflex.core.paginate.Page;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotNull;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
@@ -189,6 +187,11 @@ public class AppController {
      * @param appQueryRequest 查询请求
      * @return 精选应用列表
      */
+    @Cacheable(
+            value = "featured_app_page",
+            key = "T(com.aih.pagepilot.utils.CacheKeyUtils).generateKey(#appQueryRequest)",
+            condition = "#appQueryRequest.pageNum <= 10"
+    )
     @GetMapping("/list/featured")
     public BaseResponse<Page<AppVO>> listFeaturedAppVOByPage(AppQueryRequest appQueryRequest) {
         if (appQueryRequest == null) {
