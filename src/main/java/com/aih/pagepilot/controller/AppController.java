@@ -18,6 +18,8 @@ import com.aih.pagepilot.model.dto.AppQueryRequest;
 import com.aih.pagepilot.model.dto.AppUpdateRequest;
 import com.aih.pagepilot.model.entity.User;
 import com.aih.pagepilot.model.vo.AppVO;
+import com.aih.pagepilot.ratelimiter.annotation.RateLimit;
+import com.aih.pagepilot.ratelimiter.enums.RateLimitType;
 import com.aih.pagepilot.service.ChatHistoryService;
 import com.aih.pagepilot.service.ProjectDownloadService;
 import com.aih.pagepilot.service.UserService;
@@ -315,6 +317,7 @@ public class AppController {
      * @return 生成结果流
      */
     @GetMapping(value = "/chat/gen/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @RateLimit(limitType = RateLimitType.USER, rate = 5, rateInterval = 60, message = "生成请求过于频繁，请稍后再试")
     public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam Long appId,
                                                        @RequestParam String message,
                                                        HttpServletRequest request) {
