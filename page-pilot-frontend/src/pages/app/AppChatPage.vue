@@ -272,6 +272,34 @@ const sendMessage = async (content: string, isInitial = false) => {
       }
     }
 
+    // 处理business-error事件（后端限流等错误）
+    eventSource.addEventListener('business-error', (event: MessageEvent) => {
+      try {
+        const errorData = JSON.parse(event.data)
+        console.error('SSE业务错误事件:', errorData)
+
+        // 显示具体的错误信息
+        const errorMessage = errorData.message || '生成过程中出现错误'
+        const aiMessage = messages.value.find(msg => msg.id === aiMessageId)
+        if (aiMessage) {
+          aiMessage.content = `❌ ${errorMessage}`
+        }
+        message.error(errorMessage)
+
+        isGenerating.value = false
+        eventSource.close()
+      } catch (parseError) {
+        console.error('解析错误事件失败:', parseError, '原始数据:', event.data)
+        const aiMessage = messages.value.find(msg => msg.id === aiMessageId)
+        if (aiMessage) {
+          aiMessage.content = `❌ 服务器返回错误`
+        }
+        message.error('服务器返回错误')
+        isGenerating.value = false
+        eventSource.close()
+      }
+    })
+
     // 监听结束事件
     eventSource.addEventListener('done', () => {
       eventSource.close()
