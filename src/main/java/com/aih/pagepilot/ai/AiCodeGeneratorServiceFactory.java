@@ -1,5 +1,6 @@
 package com.aih.pagepilot.ai;
 
+import com.aih.pagepilot.ai.guardrail.PromptSafetyInputGuardrail;
 import com.aih.pagepilot.ai.model.enums.CodeGenTypeEnum;
 import com.aih.pagepilot.ai.tools.ToolManager;
 import com.aih.pagepilot.exception.BusinessException;
@@ -125,12 +126,14 @@ public class AiCodeGeneratorServiceFactory {
                     .hallucinatedToolNameStrategy(toolExecutionRequest -> ToolExecutionResultMessage.from(
                             toolExecutionRequest, "Error: there is no tool called " + toolExecutionRequest.name()
                     ))
+                    .inputGuardrails(new PromptSafetyInputGuardrail())
                     .build();
             // HTML 和多文件生成使用默认模型
             case HTML, MULTI_FILE -> AiServices.builder(AiCodeGeneratorService.class)
                     .chatModel(chatModel)
                     .streamingChatModel(openAiStreamingChatModel)
                     .chatMemory(chatMemory)
+                    .inputGuardrails(new PromptSafetyInputGuardrail())
                     .build();
             default -> throw new BusinessException(ErrorCode.SYSTEM_ERROR,
                     "不支持的代码生成类型: " + codeGenType.getValue());
