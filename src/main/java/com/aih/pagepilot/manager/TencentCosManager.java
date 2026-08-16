@@ -152,6 +152,9 @@ public class TencentCosManager {
         // 拼接目录和文件名
         StringBuilder key = new StringBuilder();
         if (directory != null && !directory.isEmpty()) {
+            if (directory.startsWith("/")) {
+                directory = directory.substring(1);
+            }
             if (!directory.endsWith("/")) {
                 directory += "/";
             }

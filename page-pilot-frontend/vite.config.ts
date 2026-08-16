@@ -18,13 +18,14 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8123',
+        // 默认后端端口 8123；本地多项目并行时用 VITE_PROXY_TARGET 覆盖（如 http://localhost:8124）
+        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8123',
         changeOrigin: true,
         ws: true, // 支持websocket和SSE
       },
       // 代理生成的网站静态资源
       '/generated': {
-        target: 'http://localhost:8123',
+        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8123',
         changeOrigin: true,
       }
     }

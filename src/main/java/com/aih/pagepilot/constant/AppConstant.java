@@ -23,16 +23,18 @@ public interface AppConstant {
     /**
      * 应用生成目录
      */
-    String CODE_OUTPUT_ROOT_DIR = System.getProperty("user.dir") + "/tmp/code_output";
+    String CODE_OUTPUT_ROOT_DIR = System.getProperty("app.code.output.root",
+            System.getProperty("user.dir") + "/tmp/code_output");
 
     /**
      * 应用部署目录
      */
-    String CODE_DEPLOY_ROOT_DIR = System.getProperty("user.dir") + "/tmp/code_deploy";
+    String CODE_DEPLOY_ROOT_DIR = System.getProperty("app.code.deploy.root",
+            System.getProperty("user.dir") + "/tmp/code_deploy");
 
     /**
-     * 应用部署域名
+     * 应用部署域名（本地开发可覆盖为 http://localhost:8124/api/static）
      */
-    String CODE_DEPLOY_HOST = "http://localhost";
+    String CODE_DEPLOY_HOST = System.getProperty("app.code.deploy.host", "http://localhost");
 
 }

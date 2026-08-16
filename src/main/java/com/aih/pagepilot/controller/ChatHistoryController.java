@@ -32,7 +32,8 @@ import java.util.List;
  * @since 2025-09-25
  */
 @RestController
-@RequestMapping("/api/chat-history")
+// 注意：全局 context-path 已含 /api，这里不能重复写 /api 前缀
+@RequestMapping("/chat-history")
 @Slf4j
 public class ChatHistoryController {
 
