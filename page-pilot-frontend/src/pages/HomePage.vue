@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onActivated } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { addApp, listMyAppVoByPage, listFeaturedAppVoByPage } from '@/api/appController'
 import { useLoginUserStore } from '@/stores/loginUser'
 import { getDeployUrl } from '@/config/env'
+import { CODE_GEN_TYPE } from '@/constants/codeGenType'
 import AppCard from '@/components/AppCard.vue'
 
 const router = useRouter()
@@ -18,6 +19,15 @@ const myApps = ref<API.AppVO[]>([])
 const featuredApps = ref<API.AppVO[]>([])
 const myAppsPagination = ref({ current: 1, pageSize: 20, total: 0 })
 const featuredAppsPagination = ref({ current: 1, pageSize: 20, total: 0 })
+
+const activeChip = ref('')
+const myTypeFilter = ref('')
+const myTypeFilters = [
+  { label: '全部', value: '' },
+  { label: 'HTML', value: CODE_GEN_TYPE.HTML },
+  { label: '多文件', value: CODE_GEN_TYPE.MULTI_FILE },
+  { label: 'Vue', value: CODE_GEN_TYPE.VUE_PROJECT },
+]
 
 const examplePrompts = [
   {
@@ -68,8 +78,9 @@ const handleSubmit = async () => {
   }
 }
 
-const setExamplePrompt = (prompt: string) => {
+const setExamplePrompt = (label: string, prompt: string) => {
   form.value.prompt = prompt
+  activeChip.value = label
 }
 
 const loadMyApps = async (page = 1) => {
@@ -77,7 +88,11 @@ const loadMyApps = async (page = 1) => {
   myAppsLoading.value = true
   try {
     const res = await listMyAppVoByPage({
-      appQueryRequest: { pageNum: page, pageSize: myAppsPagination.value.pageSize },
+      appQueryRequest: {
+        pageNum: page,
+        pageSize: myAppsPagination.value.pageSize,
+        ...(myTypeFilter.value ? { codeGenType: myTypeFilter.value } : {}),
+      },
     })
     if (res.data.code === 0 && res.data.data) {
       myApps.value = res.data.data.records || []
@@ -136,10 +151,21 @@ const featuredAppActions = [
   { label: '成品', key: 'viewWork', condition: true },
 ]
 
-onMounted(() => {
-  loadMyApps()
-  loadFeaturedApps()
-})
+const setMyTypeFilter = (value: string) => {
+  if (myTypeFilter.value === value) {
+    return
+  }
+  myTypeFilter.value = value
+  loadMyApps(1)
+}
+
+const refreshHomeLists = () => {
+  loadMyApps(myAppsPagination.value.current)
+  loadFeaturedApps(featuredAppsPagination.value.current)
+}
+
+onMounted(refreshHomeLists)
+onActivated(refreshHomeLists)
 </script>
 
 <template>
@@ -166,7 +192,8 @@ onMounted(() => {
               :key="item.label"
               type="button"
               class="chip"
-              @click="setExamplePrompt(item.prompt)"
+              :class="{ on: activeChip === item.label }"
+              @click="setExamplePrompt(item.label, item.prompt)"
             >
               {{ item.label }}
             </button>
@@ -183,6 +210,18 @@ onMounted(() => {
         <h2>我的作品</h2>
         <span>{{ myAppsPagination.total }}</span>
       </div>
+      <div class="filters">
+        <button
+          v-for="item in myTypeFilters"
+          :key="item.label"
+          type="button"
+          class="chip"
+          :class="{ on: myTypeFilter === item.value }"
+          @click="setMyTypeFilter(item.value)"
+        >
+          {{ item.label }}
+        </button>
+      </div>
       <div v-if="myApps.length" class="cards">
         <AppCard
           v-for="app in myApps"
@@ -195,7 +234,9 @@ onMounted(() => {
           @action="handleAppAction"
         />
       </div>
-      <p v-else-if="!myAppsLoading" class="empty">还没有作品。写一句描述即可创建。</p>
+      <p v-else-if="!myAppsLoading" class="empty">
+        {{ myTypeFilter ? '这一类还没有作品。' : '还没有作品。写一句描述即可创建。' }}
+      </p>
       <a-pagination
         v-if="myAppsPagination.total > myAppsPagination.pageSize"
         v-model:current="myAppsPagination.current"
@@ -211,6 +252,7 @@ onMounted(() => {
         <h2>精选</h2>
         <span>{{ featuredAppsPagination.total }}</span>
       </div>
+      <p class="block-note">别人已经部署好的例子，可以打开成品或进入对话。</p>
       <div v-if="featuredApps.length" class="cards">
         <AppCard
           v-for="app in featuredApps"
@@ -323,6 +365,11 @@ onMounted(() => {
   background: rgba(120, 120, 128, 0.24);
 }
 
+.chip.on {
+  background: rgba(0, 122, 255, 0.14);
+  color: var(--accent);
+}
+
 .primary {
   flex: 0 0 auto;
   height: 36px;
@@ -362,6 +409,19 @@ onMounted(() => {
 .block-head span {
   color: var(--mute);
   font-size: 15px;
+}
+
+.block-note {
+  margin: -4px 4px 12px;
+  color: var(--mute);
+  font-size: 14px;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
 }
 
 .cards {

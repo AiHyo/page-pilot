@@ -14,6 +14,7 @@ import aiAvatarUrl from '@/assets/aiAvatar.png'
 import myAxios from '@/request'
 import { VisualEditorManager, type ElementInfo, type EditorMessage, MessageType } from '@/utils/visualEditor'
 import { postSse } from '@/utils/sse'
+import { formatTime } from '@/utils/formatTime'
 
 const route = useRoute()
 const router = useRouter()
@@ -84,7 +85,7 @@ const loadHistoryMessages = async () => {
         id: item.id?.toString() || Date.now().toString(),
         type: toChatRole(item.messageType),
         content: item.message || '',
-        timestamp: new Date(item.createTime || '').toLocaleTimeString(),
+        timestamp: formatTime(item.createTime) || new Date(item.createTime || '').toLocaleTimeString(),
         createTime: item.createTime
       }))
 
@@ -137,7 +138,7 @@ const loadMoreHistory = async () => {
         id: item.id?.toString() || Date.now().toString(),
         type: toChatRole(item.messageType),
         content: item.message || '',
-        timestamp: new Date(item.createTime || '').toLocaleTimeString(),
+        timestamp: formatTime(item.createTime) || new Date(item.createTime || '').toLocaleTimeString(),
         createTime: item.createTime
       }))
 
@@ -333,6 +334,25 @@ const sendMessage = async (content: string, isInitial = false) => {
 }
 
 // 部署应用
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const refreshCoverAfterDeploy = async () => {
+  for (let i = 0; i < 8; i++) {
+    await wait(2000)
+    try {
+      const res = await getAppVoById({ id: appIdParam })
+      if (res.data.code === 0 && res.data.data) {
+        app.value = res.data.data
+        if (res.data.data.cover) {
+          return
+        }
+      }
+    } catch {
+      return
+    }
+  }
+}
+
 const handleDeploy = async () => {
   if (!isOwner.value) {
     message.warning('仅应用所有者可以部署')
@@ -348,6 +368,7 @@ const handleDeploy = async () => {
     const res = await deployApp({ appId: appIdParam })
     if (res.data.code === 0) {
       message.success(`部署成功！访问地址：${res.data.data}`)
+      void refreshCoverAfterDeploy()
     } else {
       message.error('部署失败：' + res.data.message)
     }
@@ -851,10 +872,16 @@ onUnmounted(() => {
           <div class="preview-content">
             <!-- 生成中状态 -->
             <div v-if="isGenerating && !showPreview" class="preview-empty">
-              <p>正在把说明写成页面</p>
+              <div class="empty-card">
+                <h3>正在生成</h3>
+                <p>写完后这里会打开这个应用的页面。</p>
+              </div>
             </div>
             <div v-else-if="!showPreview && !isGenerating" class="preview-empty">
-              <p>生成完成后，页面会出现在这里</p>
+              <div class="empty-card">
+                <h3>预览</h3>
+                <p>左侧发一句需求。生成结束后，页面会出现在这里。</p>
+              </div>
             </div>
 
             <iframe
@@ -1152,8 +1179,27 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   padding: 32px;
+}
+
+.empty-card {
+  max-width: 280px;
+  padding: 20px 18px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  text-align: left;
+}
+
+.empty-card h3 {
+  margin: 0 0 6px;
+  font-size: 17px;
+}
+
+.empty-card p {
+  margin: 0;
   color: var(--mute);
-  text-align: center;
+  font-size: 15px;
+  line-height: 1.45;
 }
 
 .preview-iframe {

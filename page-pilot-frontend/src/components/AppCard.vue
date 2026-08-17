@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { getCodeGenTypeLabel } from '@/constants/codeGenType'
+import { formatTime } from '@/utils/formatTime'
 
 interface Props {
   app: API.AppVO
@@ -40,7 +41,7 @@ const visibleActions = computed(() => props.actions.filter((action) => action.co
         <span v-if="app.codeGenType" class="kind">{{ getCodeGenTypeLabel(app.codeGenType) }}</span>
       </div>
       <p v-if="showAuthor && app.user">{{ app.user.userName || '匿名' }}</p>
-      <p v-else>创建于 {{ app.createTime }}</p>
+      <p v-else>{{ formatTime(app.createTime) || '刚刚创建' }}</p>
       <div v-if="visibleActions.length" class="acts">
         <button
           v-for="action in visibleActions"
