@@ -1,0 +1,32 @@
+{
+  "id": "smoothness",
+  "name": "smoothness",
+  "title": "page-pilot smoothness epic",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "AiHyo",
+  "assignee": "AiHyo",
+  "createdAt": "2026-08-17",
+  "completedAt": "2026-08-17",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-17-login-home",
+    "08-17-html-sse",
+    "08-17-deploy",
+    "08-17-vue-project",
+    "08-17-visual-ux"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
