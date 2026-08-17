@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { DownOutlined } from '@ant-design/icons-vue'
+
 import { getAppVoById, deployApp } from '@/api/appController'
 import { getLatestChatHistory, listAppChatHistory } from '@/api/chatHistoryController'
 import { useLoginUserStore } from '@/stores/loginUser'
@@ -665,48 +665,32 @@ onUnmounted(() => {
 <template>
   <div class="app-chat-page">
     <a-spin :spinning="loading" class="full-height">
-      <!-- 顶部栏 -->
       <div class="top-bar">
         <div class="app-info">
-          <a-dropdown>
-            <a-button type="text" class="app-selector">
-              <span class="app-icon">🤖</span>
-              <span class="app-name">{{ app?.appName || '个人博客生成器' }}</span>
-              <DownOutlined />
-            </a-button>
-            <template #overlay>
-              <a-menu>
-                <a-menu-item @click="router.push('/')">
-                  返回首页
-                </a-menu-item>
-              </a-menu>
-            </template>
-          </a-dropdown>
-          <a-tag v-if="app?.codeGenType" color="purple" class="code-type-tag">
-            {{ getCodeGenTypeLabel(app.codeGenType) }}
-          </a-tag>
+          <button type="button" class="back" @click="router.push('/')">首页</button>
+          <div class="title-block">
+            <h1 class="app-name">{{ app?.appName || '应用' }}</h1>
+            <p v-if="app?.codeGenType" class="code-type">{{ getCodeGenTypeLabel(app.codeGenType) }}</p>
+          </div>
         </div>
         <div class="top-actions">
-          <a-button @click="showAppDetail">
-            应用详情
-          </a-button>
-          <a-button
-            :loading="downloading"
-            :disabled="!generationComplete || !isOwner"
+          <button type="button" class="ghost" @click="showAppDetail">详情</button>
+          <button
+            type="button"
+            class="ghost"
+            :disabled="!generationComplete || !isOwner || downloading"
             @click="handleDownload"
           >
-            <template #icon>📥</template>
-            下载代码
-          </a-button>
-          <a-button
-            type="primary"
-            danger
-            :loading="deploying"
-            :disabled="!generationComplete || !isOwner"
+            {{ downloading ? '打包中' : '下载' }}
+          </button>
+          <button
+            type="button"
+            class="accent"
+            :disabled="!generationComplete || !isOwner || deploying"
             @click="handleDeploy"
           >
-            部署网站
-          </a-button>
+            {{ deploying ? '部署中' : '部署' }}
+          </button>
         </div>
       </div>
 
@@ -715,7 +699,7 @@ onUnmounted(() => {
         <!-- 左侧对话区域 -->
         <div class="chat-panel">
           <div class="chat-header">
-            <h3>用户消息</h3>
+            <h2>对话</h2>
           </div>
 
           <!-- 消息列表 -->
@@ -729,16 +713,14 @@ onUnmounted(() => {
               v-if="hasMoreHistory && historyLoaded && messages.length > 0"
               class="load-more-container"
             >
-              <a-button
-                type="dashed"
-                :loading="historyLoading"
-                @click="loadMoreHistory"
+              <button
+                type="button"
                 class="load-more-btn"
-                block
+                :disabled="historyLoading"
+                @click="loadMoreHistory"
               >
-                <template #icon v-if="!historyLoading">📜</template>
-                {{ historyLoading ? '加载中...' : '加载更多历史消息' }}
-              </a-button>
+                {{ historyLoading ? '加载中' : '更早的消息' }}
+              </button>
             </div>
 
             <div
@@ -783,15 +765,7 @@ onUnmounted(() => {
           <div class="chat-input">
             <!-- 生成状态提示条 -->
             <div v-if="isGenerating" class="generating-status-bar">
-              <div class="status-content">
-                <a-spin size="small" />
-                <span class="status-text">AI 正在生成中，请稍候...</span>
-                <div class="typing-dots">
-                  <span class="dot"></span>
-                  <span class="dot"></span>
-                  <span class="dot"></span>
-                </div>
-              </div>
+              正在生成
             </div>
 
             <!-- 选中元素提示 -->
@@ -851,19 +825,18 @@ onUnmounted(() => {
                     @click="toggleEditMode"
                     class="edit-mode-btn"
                   >
-                    {{ isEditMode ? '🎨 编辑中' : '✏️ 编辑' }}
+                    {{ isEditMode ? '编辑中' : '编辑' }}
                   </a-button>
                 </a-tooltip>
               </div>
-              <a-button
-                type="primary"
-                :loading="isGenerating"
-                :disabled="!userInput.trim() || !isOwner"
-                @click="sendMessage(userInput)"
+              <button
+                type="button"
                 class="send-btn"
+                :disabled="!userInput.trim() || !isOwner || isGenerating"
+                @click="sendMessage(userInput)"
               >
-                {{ isGenerating ? '生成中...' : '发送' }}
-              </a-button>
+                {{ isGenerating ? '生成中' : '发送' }}
+              </button>
             </div>
           </div>
         </div>
@@ -871,74 +844,17 @@ onUnmounted(() => {
         <!-- 右侧预览区域 -->
         <div class="preview-panel">
           <div class="preview-header">
-            <h3>生成后的网页展示</h3>
-            <div class="preview-actions">
-              <a-button type="text" size="small" @click="refreshPreview">🔄 刷新</a-button>
-            </div>
+            <h2>预览</h2>
+            <button type="button" class="ghost" @click="refreshPreview">刷新</button>
           </div>
 
           <div class="preview-content">
             <!-- 生成中状态 -->
-            <div v-if="isGenerating && !showPreview" class="generating-preview">
-              <div class="generating-content">
-                <div class="loading-animation">
-                  <div class="loading-dots">
-                    <div class="dot"></div>
-                    <div class="dot"></div>
-                    <div class="dot"></div>
-                  </div>
-                </div>
-                <h3>正在生成网站...</h3>
-                <p>AI正在根据您的需求创建网站，请稍候</p>
-                <div class="progress-info">
-                  <div class="progress-step active">
-                    <span class="step-icon">📝</span>
-                    <span>分析需求</span>
-                  </div>
-                  <div class="progress-step active">
-                    <span class="step-icon">🎨</span>
-                    <span>设计界面</span>
-                  </div>
-                  <div class="progress-step active">
-                    <span class="step-icon">💻</span>
-                    <span>生成代码</span>
-                  </div>
-                  <div class="progress-step">
-                    <span class="step-icon">🚀</span>
-                    <span>完成部署</span>
-                  </div>
-                </div>
-              </div>
+            <div v-if="isGenerating && !showPreview" class="preview-empty">
+              <p>正在把说明写成页面</p>
             </div>
-
-            <!-- 初始等待状态 -->
-            <div v-else-if="!showPreview && !isGenerating" class="preview-placeholder">
-              <div class="placeholder-content">
-                <div class="welcome-icon">🚀</div>
-                <h3>准备生成您的网站</h3>
-                <p>请在左侧描述您想要创建的网站类型和功能需求</p>
-                <div class="placeholder-features">
-                  <div class="feature-item">
-                    <span class="feature-icon">⚡</span>
-                    <span>快速生成</span>
-                  </div>
-                  <div class="feature-item">
-                    <span class="feature-icon">🎨</span>
-                    <span>精美设计</span>
-                  </div>
-                  <div class="feature-item">
-                    <span class="feature-icon">📱</span>
-                    <span>响应式布局</span>
-                  </div>
-                  <div class="feature-item">
-                    <span class="feature-icon">🔧</span>
-                    <span>易于定制</span>
-                  </div>
-                </div>
-                <div class="getting-started">
-                  <p class="tip">💡 提示：描述越详细，生成效果越好哦！</p>
-                </div>
-              </div>
+            <div v-else-if="!showPreview && !isGenerating" class="preview-empty">
+              <p>生成完成后，页面会出现在这里</p>
             </div>
 
             <iframe
@@ -967,11 +883,11 @@ onUnmounted(() => {
 
 <style scoped>
 .app-chat-page {
-  height: 100vh;
-  background: #f5f5f5;
+  height: 100dvh;
+  background: var(--bg);
   display: flex;
   flex-direction: column;
-  margin: -24px;
+  color: var(--ink);
 }
 
 .full-height {
@@ -980,13 +896,21 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
+.full-height :deep(.ant-spin-container) {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
 .top-bar {
-  background: white;
-  border-bottom: 1px solid #e8e8e8;
-  padding: 8px 24px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.82);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(16px);
   flex-shrink: 0;
 }
 
@@ -994,236 +918,214 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
 }
 
-.app-selector {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 16px;
-  font-weight: 500;
+.title-block {
+  min-width: 0;
 }
 
-.app-icon {
-  font-size: 20px;
+.app-name {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.code-type-tag {
-  font-weight: 500;
-  border-radius: 6px;
-  padding: 4px 12px;
-  font-size: 13px;
+.code-type {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--mute);
 }
 
 .top-actions {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
+  flex-shrink: 0;
+}
+
+.back,
+.ghost,
+.accent,
+.send-btn,
+.load-more-btn {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.back,
+.ghost {
+  background: transparent;
+  color: var(--accent);
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+.back:hover,
+.ghost:hover:not(:disabled) {
+  background: var(--fill);
+}
+
+.accent,
+.send-btn {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 10px;
+  padding: 7px 14px;
+  font-weight: 600;
+}
+
+.accent:hover:not(:disabled),
+.send-btn:hover:not(:disabled) {
+  background: var(--accent-press);
+}
+
+.accent:disabled,
+.send-btn:disabled,
+.ghost:disabled,
+.load-more-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .main-content {
   flex: 1;
   display: flex;
   min-height: 0;
-  height: calc(100vh - 60px); /* 减去顶部栏高度 */
+}
+
+.chat-panel,
+.preview-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
 }
 
 .chat-panel {
-  width: 45%;
-  background: white;
-  border-right: 1px solid #e8e8e8;
+  width: 42%;
+  background: var(--bg);
+  border-right: 1px solid var(--line);
+}
+
+.preview-panel {
+  width: 58%;
+  background: var(--surface);
+}
+
+.chat-header,
+.preview-header {
   display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0; /* 允许flex子项收缩 */
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
 }
 
-.chat-header {
-  padding: 12px 16px;
-  border-bottom: 1px solid #e8e8e8;
-  background: #fafafa;
-}
-
-.chat-header h3 {
+.chat-header h2,
+.preview-header h2 {
   margin: 0;
-  color: #333;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mute);
 }
 
 .chat-messages {
   flex: 1;
-  padding: 16px 20px;
+  padding: 16px;
   overflow-y: auto;
-  background: #f9f9f9;
   position: relative;
-  scroll-behavior: smooth;
-  min-height: 0; /* 允许收缩 */
+  min-height: 0;
 }
 
 .message {
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .message-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .message-time {
   font-size: 12px;
-  color: #999;
+  color: var(--mute);
 }
 
 .message-content {
   margin-left: 40px;
-  padding: 12px 16px;
-  border-radius: 8px;
-  max-width: 80%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  max-width: 86%;
 }
 
 .user-message .message-content {
-  background: #1890ff;
-  color: white;
+  background: var(--accent);
+  color: #fff;
   margin-left: auto;
-  margin-right: 40px;
+  margin-right: 0;
 }
 
 .ai-message .message-content {
-  background: white;
-  border: 1px solid #e8e8e8;
+  background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
-.ai-content {
-  margin: 0;
-  padding: 0;
-  background: transparent;
-  border: none;
-}
-
-/* AI消息内容的Markdown样式优化 */
 .ai-message .ai-content :deep(.markdown-content) {
   font-size: 14px;
-  line-height: 1.6;
-  color: #333;
+  line-height: 1.55;
+  color: var(--ink);
 }
 
 .ai-message .ai-content :deep(pre) {
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
-  border-radius: 4px;
+  background: var(--bg);
+  border-radius: 10px;
   padding: 12px;
   margin: 8px 0;
   font-size: 13px;
 }
 
-.ai-message .ai-content :deep(code) {
-  background: #f1f3f4;
-  padding: 2px 4px;
-  border-radius: 3px;
-  font-size: 13px;
-}
-
 .user-content {
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 15px;
+  line-height: 1.45;
 }
-
-/* 移除旧的生成指示器样式，已替换为状态提示条 */
 
 .scroll-to-bottom {
   position: absolute;
   bottom: 16px;
   right: 16px;
-  z-index: 10;
-  animation: fadeIn 0.3s ease-in-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .chat-input {
-  border-top: 1px solid #e8e8e8;
-  padding: 16px 20px;
-  background: white;
-  flex-shrink: 0; /* 防止输入区域被压缩 */
-  position: relative;
+  border-top: 1px solid var(--line);
+  padding: 12px 16px 16px;
+  background: var(--surface);
+  flex-shrink: 0;
 }
 
-/* 生成状态提示条样式 */
 .generating-status-bar {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  margin: -12px -16px 12px;
   padding: 8px 16px;
-  margin: -16px -20px 12px -20px;
-  border-radius: 0;
-  animation: slideDown 0.3s ease-out;
-}
-
-@keyframes slideDown {
-  from {
-    transform: translateY(-100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-.status-content {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 14px;
-}
-
-.status-text {
-  flex: 1;
-}
-
-.typing-dots {
-  display: flex;
-  gap: 4px;
-}
-
-.typing-dots .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.8);
-  animation: typingBounce 1.4s infinite ease-in-out both;
-}
-
-.typing-dots .dot:nth-child(1) {
-  animation-delay: -0.32s;
-}
-
-.typing-dots .dot:nth-child(2) {
-  animation-delay: -0.16s;
-}
-
-@keyframes typingBounce {
-  0%, 80%, 100% {
-    transform: scale(0.8);
-    opacity: 0.5;
-  }
-  40% {
-    transform: scale(1);
-    opacity: 1;
-  }
+  background: var(--fill);
+  color: var(--ink);
+  font-size: 13px;
 }
 
 .input-field {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
+}
+
+.input-field :deep(textarea) {
+  border-radius: 12px;
+  border-color: var(--line);
+  background: var(--bg);
 }
 
 .input-actions {
@@ -1232,356 +1134,96 @@ onUnmounted(() => {
   align-items: center;
 }
 
-.left-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.send-btn {
-  border-radius: 50%;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-}
-
-.preview-panel {
-  width: 55%;
-  background: white;
-  display: flex;
-  flex-direction: column;
-}
-
-.preview-header {
-  padding: 12px 16px;
-  border-bottom: 1px solid #e8e8e8;
-  background: #fafafa;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.preview-header h3 {
-  margin: 0;
-  color: #333;
-}
-
-.preview-actions {
-  display: flex;
-  gap: 8px;
+.edit-mode-active {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .preview-content {
   flex: 1;
   position: relative;
-  background: #f5f5f5;
+  background: var(--bg);
+  min-height: 0;
 }
 
-.preview-placeholder {
+.preview-empty {
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 40px;
-}
-
-.placeholder-content {
+  padding: 32px;
+  color: var(--mute);
   text-align: center;
-  max-width: 400px;
-}
-
-.welcome-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-}
-
-.placeholder-content h3 {
-  font-size: 24px;
-  margin-bottom: 12px;
-  color: #333;
-  font-weight: 600;
-}
-
-.placeholder-content p {
-  color: #666;
-  margin-bottom: 32px;
-  font-size: 16px;
-  line-height: 1.5;
-}
-
-.placeholder-features {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 32px;
-}
-
-.feature-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #495057;
-}
-
-.feature-icon {
-  font-size: 18px;
-}
-
-.getting-started {
-  padding: 16px;
-  background: linear-gradient(135deg, #e3f2fd, #f3e5f5);
-  border-radius: 12px;
-  border: 1px solid #e1e5e9;
-}
-
-.tip {
-  margin: 0;
-  color: #6366f1;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-/* 生成中状态样式 */
-.generating-preview {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 40px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-}
-
-.generating-content {
-  text-align: center;
-  max-width: 400px;
-}
-
-.loading-animation {
-  margin-bottom: 24px;
-}
-
-.loading-dots {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-}
-
-.dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  animation: bounce 1.4s infinite ease-in-out both;
-}
-
-.dot:nth-child(1) {
-  animation-delay: -0.32s;
-}
-
-.dot:nth-child(2) {
-  animation-delay: -0.16s;
-}
-
-@keyframes bounce {
-  0%, 80%, 100% {
-    transform: scale(0);
-  }
-  40% {
-    transform: scale(1);
-  }
-}
-
-.generating-content h3 {
-  font-size: 24px;
-  margin-bottom: 12px;
-  color: #1e293b;
-  font-weight: 600;
-}
-
-.generating-content p {
-  color: #64748b;
-  margin-bottom: 32px;
-  font-size: 16px;
-  line-height: 1.5;
-}
-
-.progress-info {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 24px;
-}
-
-.progress-step {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 16px 12px;
-  border-radius: 12px;
-  background: white;
-  border: 2px solid #e2e8f0;
-  transition: all 0.3s ease;
-  flex: 1;
-}
-
-.progress-step.active {
-  border-color: #667eea;
-  background: linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
-}
-
-.step-icon {
-  font-size: 20px;
-  margin-bottom: 4px;
-}
-
-.progress-step span:last-child {
-  font-size: 12px;
-  font-weight: 500;
-  color: #64748b;
-}
-
-.progress-step.active span:last-child {
-  color: #4338ca;
 }
 
 .preview-iframe {
   width: 100%;
   height: 100%;
-  border: none;
+  border: 0;
+  background: #fff;
 }
 
-/* 加载更多按钮样式 */
 .load-more-container {
-  padding: 16px 20px 8px 20px;
+  padding: 0 0 12px;
   text-align: center;
 }
 
 .load-more-btn {
-  border-radius: 8px;
-  border: 2px dashed #d9d9d9;
-  background: #fafafa;
-  color: #666;
-  font-weight: 500;
-  transition: all 0.3s ease;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+  background: var(--surface);
+  color: var(--accent);
+  border-radius: 10px;
+  padding: 8px 14px;
+  box-shadow: var(--shadow);
 }
 
-.load-more-btn:hover {
-  border-color: #40a9ff;
-  background: #f0f8ff;
-  color: #40a9ff;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(64, 169, 255, 0.15);
+.disabled-input :deep(textarea) {
+  opacity: 0.55;
 }
 
-.load-more-btn:active {
-  transform: translateY(0);
-}
-
-.disabled-input {
-  cursor: not-allowed !important;
-  background-color: #f5f5f5 !important;
-  opacity: 0.6;
-}
-
-.disabled-input:hover {
-  border-color: #d9d9d9 !important;
-}
-
-/* 可视化编辑相关样式 */
 .selected-element-alert {
-  margin-bottom: 12px;
-  animation: slideInDown 0.3s ease-out;
-}
-
-@keyframes slideInDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  margin-bottom: 10px;
 }
 
 .selected-element-info {
   display: flex;
-  align-items: center;
-  gap: 6px;
   flex-wrap: wrap;
-  font-family: 'Courier New', monospace;
+  gap: 6px;
   font-size: 13px;
 }
 
-.element-label {
-  font-weight: 600;
-  color: #1890ff;
-  margin-right: 4px;
-}
-
-.element-tag {
-  color: #cf222e;
-  font-weight: 500;
-}
-
-.element-class {
-  color: #0969da;
-}
-
-.element-id {
-  color: #8250df;
-}
-
-.element-text {
-  color: #57606a;
-  font-style: italic;
-  max-width: 300px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.edit-mode-btn {
-  transition: all 0.3s ease;
-}
-
-.edit-mode-btn:not(:disabled):hover {
-  color: #1890ff !important;
-  background-color: #e6f7ff !important;
-}
-
-.edit-mode-active {
-  color: #1890ff !important;
-  background-color: #e6f7ff !important;
-  font-weight: 600;
-}
-
-.edit-mode-active:not(:disabled) {
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
+@media (max-width: 767px) {
+  .main-content {
+    flex-direction: column;
   }
-  50% {
-    opacity: 0.7;
+
+  .chat-panel,
+  .preview-panel {
+    width: 100%;
+  }
+
+  .chat-panel {
+    flex: 1;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .preview-panel {
+    flex: 0 0 42%;
+    min-height: 220px;
+  }
+
+  .app-name {
+    max-width: 42vw;
+  }
+
+  .top-bar {
+    padding: 8px 10px;
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .app-chat-page * {
+    transition: none;
+  }
+}
 </style>

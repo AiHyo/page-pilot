@@ -1,35 +1,47 @@
 <template>
-  <div id="userLoginPage">
-    <h2 class="title">PagePilot - 用户登录</h2>
-    <div class="desc">不写一行代码，生成完整应用</div>
-    <a-form :model="formState" name="basic" autocomplete="off" @finish="handleSubmit">
-      <a-form-item name="userAccount" :rules="[{ required: true, message: '请输入账号' }]">
-        <a-input v-model:value="formState.userAccount" placeholder="请输入账号" />
-      </a-form-item>
-      <a-form-item
-        name="userPassword"
-        :rules="[
-          { required: true, message: '请输入密码' },
-          { min: 8, message: '密码长度不能小于 8 位' },
-        ]"
-      >
-        <a-input-password v-model:value="formState.userPassword" placeholder="请输入密码" />
-      </a-form-item>
-      <div class="tips">
-        没有账号
-        <RouterLink to="/user/register">去注册</RouterLink>
-      </div>
-      <a-form-item>
-        <a-button type="primary" html-type="submit" style="width: 100%">登录</a-button>
-      </a-form-item>
-    </a-form>
+  <div class="auth">
+    <RouterLink to="/" class="back">‹ 返回</RouterLink>
+
+    <header class="large-title">
+      <p class="product">PagePilot</p>
+      <h1>登录</h1>
+      <p class="sub">用一句话生成可预览、可部署的网站</p>
+    </header>
+
+    <form class="group" @submit.prevent="handleSubmit">
+      <label class="row">
+        <span>账号</span>
+        <input v-model="formState.userAccount" type="text" autocomplete="username" placeholder="必填" />
+      </label>
+      <label class="row">
+        <span>密码</span>
+        <input
+          v-model="formState.userPassword"
+          type="password"
+          autocomplete="current-password"
+          placeholder="至少 8 位"
+        />
+      </label>
+    </form>
+
+    <button type="button" class="text-btn" @click="fillDemo">填入演示账号</button>
+
+    <button class="primary" type="button" :disabled="submitting" @click="handleSubmit">
+      {{ submitting ? '登录中…' : '登录' }}
+    </button>
+
+    <p class="foot">
+      没有账号？
+      <RouterLink to="/user/register">创建账号</RouterLink>
+    </p>
   </div>
 </template>
+
 <script lang="ts" setup>
-import { reactive } from 'vue'
+import { reactive, ref } from 'vue'
 import { userLogin } from '@/api/userController.ts'
 import { useLoginUserStore } from '@/stores/loginUser.ts'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 
 const formState = reactive<API.UserLoginRequest>({
@@ -37,49 +49,165 @@ const formState = reactive<API.UserLoginRequest>({
   userPassword: '',
 })
 
+const submitting = ref(false)
 const router = useRouter()
+const route = useRoute()
 const loginUserStore = useLoginUserStore()
 
-/**
- * 提交表单
- * @param values
- */
-const handleSubmit = async (values: any) => {
-  const res = await userLogin(values)
-  // 登录成功
-  if (res.data.code === 0 && res.data.data) {
-    await loginUserStore.fetchLoginUser()
-    message.success('登录成功')
-    router.push({
-      path: '/',
-      replace: true,
-    })
-  } else {
-    message.error('登录失败，' + res.data.message)
+const fillDemo = () => {
+  formState.userAccount = 'demo_user'
+  formState.userPassword = 'demo123456'
+}
+
+const handleSubmit = async () => {
+  if (!formState.userAccount?.trim()) {
+    message.error('请填写账号')
+    return
+  }
+  if (!formState.userPassword || formState.userPassword.length < 8) {
+    message.error('密码至少 8 位')
+    return
+  }
+  if (submitting.value) return
+  submitting.value = true
+  try {
+    const res = await userLogin(formState)
+    if (res.data.code === 0 && res.data.data) {
+      await loginUserStore.fetchLoginUser()
+      message.success('已登录')
+      const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
+      router.replace(redirect.startsWith('http') ? '/' : redirect || '/')
+    } else {
+      message.error(res.data.message || '账号或密码不对')
+    }
+  } catch {
+    message.error('登录失败，请稍后重试')
+  } finally {
+    submitting.value = false
   }
 }
 </script>
-<style>
-#userLoginPage {
-  max-width: 480px;
+
+<style scoped>
+.auth {
+  min-height: 100vh;
+  max-width: 430px;
   margin: 0 auto;
+  padding: 16px 20px 48px;
+  background: var(--bg);
 }
 
-.title {
-  text-align: center;
-  margin-bottom: 16px;
+.back {
+  display: inline-block;
+  margin: 8px 0 20px;
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 17px;
 }
 
-.desc {
-  text-align: center;
-  color: #bbb;
-  margin-bottom: 16px;
+.large-title {
+  margin-bottom: 28px;
 }
 
-.tips {
-  text-align: right;
-  color: #bbb;
+.product {
+  margin: 0 0 4px;
+  color: var(--mute);
   font-size: 13px;
-  margin-bottom: 16px;
+  font-weight: 590;
+}
+
+.large-title h1 {
+  margin: 0 0 8px;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.sub {
+  margin: 0;
+  color: var(--mute);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.group {
+  background: var(--surface);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-bottom: 0.5px solid var(--line);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.row span {
+  font-size: 17px;
+}
+
+.row input {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font-size: 17px;
+  color: var(--ink);
+  text-align: right;
+  outline: none;
+}
+
+.row input::placeholder {
+  color: rgba(60, 60, 67, 0.3);
+}
+
+.text-btn {
+  display: block;
+  margin: 12px 4px 20px;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.primary {
+  width: 100%;
+  height: 50px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 590;
+  cursor: pointer;
+}
+
+.primary:disabled {
+  opacity: 0.45;
+  cursor: wait;
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--accent-press);
+}
+
+.foot {
+  margin-top: 28px;
+  text-align: center;
+  color: var(--mute);
+  font-size: 15px;
+}
+
+.foot a {
+  text-decoration: none;
 }
 </style>

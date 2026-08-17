@@ -14,167 +14,123 @@ interface Props {
   }>
 }
 
-interface Emits {
-  (e: 'action', key: string, app: API.AppVO): void
-}
-
 const props = withDefaults(defineProps<Props>(), {
   showFeaturedBadge: false,
   showAuthor: false,
-  actions: () => []
+  actions: () => [],
 })
 
-const emit = defineEmits<Emits>()
+const emit = defineEmits<{
+  action: [key: string, app: API.AppVO]
+}>()
 
-// 是否为精选应用
 const isFeatured = computed(() => props.app.priority === 99)
-
-// 处理操作点击
-const handleAction = (key: string) => {
-  emit('action', key, props.app)
-}
-
-// 过滤可显示的操作
-const visibleActions = computed(() => {
-  return props.actions.filter(action => action.condition !== false)
-})
+const visibleActions = computed(() => props.actions.filter((action) => action.condition !== false))
 </script>
 
 <template>
-  <a-card
-    :hoverable="true"
-    :class="['app-card', { 'featured-card': showFeaturedBadge && isFeatured }]"
-  >
-    <template #cover>
-      <div class="app-cover">
-        <img 
-          v-if="app.cover" 
-          :src="app.cover" 
-          :alt="app.appName"
-          class="cover-image"
-        />
-        <div v-else class="default-cover">
-          📄
-        </div>
-        <!-- 生成类型标签 -->
-        <div v-if="app.codeGenType" class="code-type-badge">
-          {{ getCodeGenTypeLabel(app.codeGenType) }}
-        </div>
+  <article class="card" :class="{ featured: showFeaturedBadge && isFeatured }">
+    <div class="cover">
+      <img v-if="app.cover" :src="app.cover" :alt="app.appName" />
+      <span v-else class="blank">暂无预览</span>
+    </div>
+    <div class="body">
+      <div class="title-row">
+        <h3>{{ app.appName }}</h3>
+        <span v-if="app.codeGenType" class="kind">{{ getCodeGenTypeLabel(app.codeGenType) }}</span>
       </div>
-    </template>
-    
-    <a-card-meta>
-      <template #title>
-        <div v-if="showFeaturedBadge && isFeatured" class="featured-title">
-          {{ app.appName }}
-          <span class="featured-badge">精选</span>
-        </div>
-        <div v-else>{{ app.appName }}</div>
-      </template>
-      
-      <template #description>
-        <div v-if="showAuthor && app.user" class="app-author">
-          <a-avatar :size="20" :src="app.user.userAvatar">
-            {{ app.user.userName?.[0] }}
-          </a-avatar>
-          <span>{{ app.user.userName || 'NoCode 官方' }}</span>
-        </div>
-        <div v-else class="app-create-time">
-          创建于 {{ app.createTime }}
-        </div>
-      </template>
-    </a-card-meta>
-    
-    <template v-if="visibleActions.length > 0" #actions>
-      <a-button 
-        v-for="action in visibleActions"
-        :key="action.key"
-        :type="action.type || 'link'"
-        size="small"
-        @click="handleAction(action.key)"
-      >
-        {{ action.label }}
-      </a-button>
-    </template>
-  </a-card>
+      <p v-if="showAuthor && app.user">{{ app.user.userName || '匿名' }}</p>
+      <p v-else>创建于 {{ app.createTime }}</p>
+      <div v-if="visibleActions.length" class="acts">
+        <button
+          v-for="action in visibleActions"
+          :key="action.key"
+          type="button"
+          @click="emit('action', action.key, app)"
+        >
+          {{ action.label }}
+        </button>
+      </div>
+    </div>
+  </article>
 </template>
 
 <style scoped>
-.app-card {
-  border-radius: 12px;
+.card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  transition: all 0.3s ease;
-  cursor: pointer;
+  box-shadow: var(--shadow);
 }
 
-.app-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+.cover {
+  height: 148px;
+  background: #e5e5ea;
 }
 
-.app-cover {
-  height: 180px;
-  background: #f5f5f5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-}
-
-.cover-image {
+.cover img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.default-cover {
-  font-size: 48px;
-  color: #ccc;
+.blank {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--mute);
+  font-size: 13px;
 }
 
-.code-type-badge {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background: rgba(114, 46, 209, 0.9);
-  color: white;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  backdrop-filter: blur(4px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  z-index: 1;
+.body {
+  padding: 12px 14px 14px;
 }
 
-.featured-title {
+.title-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-}
-
-.featured-badge {
-  background: #ff4d4f;
-  color: white;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.app-author {
-  display: flex;
-  align-items: center;
   gap: 8px;
 }
 
-.app-create-time {
-  color: #666;
-  font-size: 14px;
+.body h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
 }
 
-.featured-card {
-  border: 2px solid #ff4d4f;
-  box-shadow: 0 4px 12px rgba(255, 77, 79, 0.15);
+.kind {
+  flex: 0 0 auto;
+  color: var(--mute);
+  font-size: 12px;
+  font-weight: 510;
+}
+
+.body p {
+  margin: 4px 0 0;
+  color: var(--mute);
+  font-size: 13px;
+}
+
+.acts {
+  display: flex;
+  gap: 16px;
+  margin-top: 10px;
+}
+
+.acts button {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 510;
+  cursor: pointer;
+}
+
+.featured .kind {
+  color: var(--accent);
 }
 </style>

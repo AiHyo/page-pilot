@@ -1,38 +1,23 @@
 <template>
-  <a-layout-footer class="footer">
-    <div class="footer-content">
-      <p class="copyright">
-        <a
-          href="https://github.com/AiHyo"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="author-link"
-        >
-          AiHyo
-        </a>
-      </p>
-    </div>
-  </a-layout-footer>
+  <footer class="footer">
+    <a href="https://github.com/AiHyo" target="_blank" rel="noopener noreferrer">AiHyo</a>
+    <span>PagePilot</span>
+  </footer>
 </template>
-
-<script setup lang="ts">
-// 无需额外的响应式数据
-</script>
 
 <style scoped>
 .footer {
-  background: #efefef;
-  text-align: center;
-  padding: 20px;
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 28px 20px 36px;
+  display: flex;
+  justify-content: space-between;
+  color: var(--mute);
+  font-size: 13px;
 }
 
-.copyright {
-  margin: 0;
-  color: #666;
-  font-size: 14px;
+.footer a {
+  color: var(--mute);
+  text-decoration: none;
 }
 </style>
