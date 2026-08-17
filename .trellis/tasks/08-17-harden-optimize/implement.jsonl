@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend layer index and checklist"}
+{"file": ".trellis/spec/product/index.md", "reason": "Product constraints: ports, no voice"}
+{"file": ".trellis/spec/product/acceptance.md", "reason": "Demo happy-path acceptance"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Generate POST and preview isolation cross layer"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Shared path jail and sort allow-list"}
+{"file": ".trellis/tasks/08-17-harden-optimize/research/audit-findings.md", "reason": "Confirmed bug and vuln inventory"}

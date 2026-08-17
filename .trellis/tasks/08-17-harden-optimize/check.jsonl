@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend quality checklist"}
+{"file": ".trellis/spec/product/index.md", "reason": "Product constraints"}
+{"file": ".trellis/spec/product/acceptance.md", "reason": "Must not regress demo walkthrough"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "API and frontend contract must match"}
+{"file": ".trellis/tasks/08-17-harden-optimize/research/audit-findings.md", "reason": "Every listed in-scope ID must be closed"}
