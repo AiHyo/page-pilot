@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { DownOutlined } from '@ant-design/icons-vue'
-import { getAppVoById, deployApp, deleteApp } from '@/api/appController'
-import { getLatestChatHistory, listAppChatHistory, addChatHistory } from '@/api/chatHistoryController'
+import { getAppVoById, deployApp } from '@/api/appController'
+import { getLatestChatHistory, listAppChatHistory } from '@/api/chatHistoryController'
 import { useLoginUserStore } from '@/stores/loginUser'
 import { getCodeGenTypeLabel } from '@/constants/codeGenType'
 import { getPreviewUrl } from '@/config/env'
@@ -13,12 +13,15 @@ import AppDetailModal from '@/components/AppDetailModal.vue'
 import aiAvatarUrl from '@/assets/aiAvatar.png'
 import myAxios from '@/request'
 import { VisualEditorManager, type ElementInfo, type EditorMessage, MessageType } from '@/utils/visualEditor'
+import { postSse } from '@/utils/sse'
 
 const route = useRoute()
 const router = useRouter()
 const loginUserStore = useLoginUserStore()
 
 const appId = route.params.id as string
+// OpenAPI types use number; snowflake ids stay strings at runtime to keep precision.
+const appIdParam = appId as unknown as number
 
 // 应用信息
 const app = ref<API.AppVO>()
@@ -63,6 +66,11 @@ const isEditMode = ref(false)
 const selectedElement = ref<ElementInfo | null>(null)
 const visualEditorManager = ref<VisualEditorManager | null>(null)
 const previewIframeRef = ref<HTMLIFrameElement | null>(null)
+const generateAbort = ref<AbortController | null>(null)
+const sawBusinessError = ref(false)
+
+const toChatRole = (messageType?: string): 'user' | 'ai' =>
+  (messageType || '').toLowerCase() === 'user' ? 'user' : 'ai'
 
 // 加载历史消息
 const loadHistoryMessages = async () => {
@@ -70,11 +78,11 @@ const loadHistoryMessages = async () => {
 
   historyLoading.value = true
   try {
-    const res = await getLatestChatHistory({ appId: appId as any, limit: 10 })
+    const res = await getLatestChatHistory({ appId: appIdParam, limit: 10 })
     if (res.data.code === 0 && res.data.data) {
       const historyMessages = res.data.data.map((item: API.ChatHistoryVO) => ({
         id: item.id?.toString() || Date.now().toString(),
-        type: item.messageType === 'USER' ? 'user' : 'ai' as 'user' | 'ai',
+        type: toChatRole(item.messageType),
         content: item.message || '',
         timestamp: new Date(item.createTime || '').toLocaleTimeString(),
         createTime: item.createTime
@@ -119,7 +127,7 @@ const loadMoreHistory = async () => {
   historyLoading.value = true
   try {
     const res = await listAppChatHistory({
-      appId: appId as any,
+      appId: appIdParam,
       pageSize: 10,
       lastCreateTime: lastCreateTime.value
     })
@@ -127,7 +135,7 @@ const loadMoreHistory = async () => {
     if (res.data.code === 0 && res.data.data?.records) {
       const newMessages = res.data.data.records.map((item: API.ChatHistory) => ({
         id: item.id?.toString() || Date.now().toString(),
-        type: item.messageType === 'USER' ? 'user' : 'ai' as 'user' | 'ai',
+        type: toChatRole(item.messageType),
         content: item.message || '',
         timestamp: new Date(item.createTime || '').toLocaleTimeString(),
         createTime: item.createTime
@@ -159,12 +167,12 @@ const loadMoreHistory = async () => {
 const loadApp = async () => {
   loading.value = true
   try {
-    const res = await getAppVoById({ id: appId as any })
+    const res = await getAppVoById({ id: appIdParam })
     if (res.data.code === 0 && res.data.data) {
       app.value = res.data.data
 
       // 检查是否为应用所有者
-      isOwner.value = app.value.userId === loginUserStore.loginUser.id
+      isOwner.value = String(app.value.userId ?? '') === String(loginUserStore.loginUser.id ?? '')
 
       // 先加载历史消息
       await loadHistoryMessages()
@@ -177,7 +185,7 @@ const loadApp = async () => {
       message.error('加载应用失败')
       router.push('/')
     }
-  } catch (error) {
+  } catch {
     message.error('加载应用失败')
     router.push('/')
   } finally {
@@ -210,17 +218,7 @@ const sendMessage = async (content: string, isInitial = false) => {
   if (!isInitial) {
     messages.value.push(userMessage)
     scrollToBottom()
-
-    // 保存用户消息到后端
-    try {
-      await addChatHistory({
-        message: messageContent,
-        messageType: 'USER',
-        appId: appId as any
-      })
-    } catch (error) {
-      console.error('保存用户消息失败:', error)
-    }
+    // User/AI turns are persisted by the backend SSE handler.
   }
 
   // 添加AI消息占位符
@@ -237,118 +235,109 @@ const sendMessage = async (content: string, isInitial = false) => {
   userInput.value = ''
   isGenerating.value = true
   generationComplete.value = false
+  sawBusinessError.value = false
   scrollToBottom()
 
-  try {
-    // 调用SSE接口
-    const eventSource = new EventSource(`/api/app/chat/gen/code?appId=${appId}&message=${encodeURIComponent(messageContent)}`)
+  generateAbort.value?.abort()
+  const controller = new AbortController()
+  generateAbort.value = controller
 
-    eventSource.onmessage = (event) => {
-      try {
-        // 后端返回的数据格式是 {"data": "内容"}
-        const data = JSON.parse(event.data)
-        const aiMessage = messages.value.find(msg => msg.id === aiMessageId)
-        if (aiMessage && data.data) {
-          // 先检查当前滚动状态
-          checkIfAtBottom()
-          const wasAtBottom = isAtBottom.value
-
-          aiMessage.content += data.data
-
-          // 如果用户在底部或者没有手动滚动过，则自动滚动
-          if (wasAtBottom || !userHasScrolled.value) {
-            // 使用双重nextTick确保DOM更新完成
-            nextTick(() => {
-              nextTick(() => {
-                if (chatMessagesRef.value) {
-                  chatMessagesRef.value.scrollTop = chatMessagesRef.value.scrollHeight
-                }
-              })
-            })
-          }
-        }
-      } catch (parseError) {
-        console.error('解析SSE数据失败:', parseError)
-      }
+  const appendAiChunk = (chunk: string) => {
+    const current = messages.value.find(msg => msg.id === aiMessageId)
+    if (!current || !chunk) {
+      return
     }
-
-    // 处理business-error事件（后端限流等错误）
-    eventSource.addEventListener('business-error', (event: MessageEvent) => {
-      try {
-        const errorData = JSON.parse(event.data)
-        console.error('SSE业务错误事件:', errorData)
-
-        // 显示具体的错误信息
-        const errorMessage = errorData.message || '生成过程中出现错误'
-        const aiMessage = messages.value.find(msg => msg.id === aiMessageId)
-        if (aiMessage) {
-          aiMessage.content = `❌ ${errorMessage}`
-        }
-        message.error(errorMessage)
-
-        isGenerating.value = false
-        eventSource.close()
-      } catch (parseError) {
-        console.error('解析错误事件失败:', parseError, '原始数据:', event.data)
-        const aiMessage = messages.value.find(msg => msg.id === aiMessageId)
-        if (aiMessage) {
-          aiMessage.content = `❌ 服务器返回错误`
-        }
-        message.error('服务器返回错误')
-        isGenerating.value = false
-        eventSource.close()
-      }
-    })
-
-    // 监听结束事件
-    eventSource.addEventListener('done', () => {
-      eventSource.close()
-      // 防止重复触发
-      if (isGenerating.value) {
-        isGenerating.value = false
-        generationComplete.value = true
-        showPreview.value = true
-        previewUrl.value = getPreviewUrl(app.value?.codeGenType || '', appId)
-        message.success('代码生成完成！')
-
-        // 保存AI消息到后端
-        const aiMessage = messages.value.find(msg => msg.id === aiMessageId)
-        if (aiMessage && aiMessage.content) {
-          try {
-            addChatHistory({
-              message: aiMessage.content,
-              messageType: 'ai',
-              appId: appId as any
-            })
-          } catch (error) {
-            console.error('保存AI消息失败:', error)
+    checkIfAtBottom()
+    const wasAtBottom = isAtBottom.value
+    current.content += chunk
+    if (wasAtBottom || !userHasScrolled.value) {
+      nextTick(() => {
+        nextTick(() => {
+          if (chatMessagesRef.value) {
+            chatMessagesRef.value.scrollTop = chatMessagesRef.value.scrollHeight
           }
-        }
+        })
+      })
+    }
+  }
 
-        // 如果有选中元素，清除选中状态并退出编辑模式
-        if (selectedElement.value) {
-          clearSelectedElement()
-          exitEditMode()
-        }
-      }
-    })
+  const failGeneration = (errorMessage: string) => {
+    sawBusinessError.value = true
+    isGenerating.value = false
+    const current = messages.value.find(msg => msg.id === aiMessageId)
+    if (current) {
+      current.content = `❌ ${errorMessage}`
+    }
+    message.error(errorMessage)
+    controller.abort()
+  }
 
-    eventSource.onerror = (error) => {
-      console.error('SSE连接错误:', error)
-      eventSource.close()
+  const finishGeneration = () => {
+    if (sawBusinessError.value || !isGenerating.value) {
+      return
+    }
+    isGenerating.value = false
+    generationComplete.value = true
+    showPreview.value = true
+    previewUrl.value = getPreviewUrl(app.value?.codeGenType || '', appId)
+    message.success('代码生成完成！')
+    if (selectedElement.value) {
+      clearSelectedElement()
+      exitEditMode()
+    }
+  }
+
+  try {
+    await postSse(
+      '/api/app/chat/gen/code',
+      { appId, message: messageContent },
+      (eventName, data) => {
+        if (eventName === 'business-error') {
+          try {
+            const errorData = JSON.parse(data || '{}') as { message?: string }
+            failGeneration(errorData.message || '生成过程中出现错误')
+          } catch (parseError) {
+            console.error('解析错误事件失败:', parseError, '原始数据:', data)
+            failGeneration('服务器返回错误')
+          }
+          return
+        }
+        if (eventName === 'done') {
+          finishGeneration()
+          return
+        }
+        if (eventName !== 'message' || sawBusinessError.value) {
+          return
+        }
+        try {
+          const parsed = JSON.parse(data) as { data?: string }
+          appendAiChunk(parsed.data || '')
+        } catch (parseError) {
+          console.error('解析SSE数据失败:', parseError)
+        }
+      },
+      controller.signal,
+    )
+    if (isGenerating.value && !sawBusinessError.value) {
       isGenerating.value = false
       message.error('代码生成失败，请重试')
     }
-
   } catch (error) {
+    if (controller.signal.aborted || sawBusinessError.value) {
+      return
+    }
     console.error('发送消息失败:', error)
-    message.error('发送消息失败')
     isGenerating.value = false
+    message.error(error instanceof Error ? error.message : '发送消息失败')
   }
 }
 
 // 部署应用
 const handleDeploy = async () => {
+  if (!isOwner.value) {
+    message.warning('仅应用所有者可以部署')
+    return
+  }
   if (!generationComplete.value) {
     message.warning('请等待代码生成完成后再部署')
     return
@@ -356,21 +345,57 @@ const handleDeploy = async () => {
 
   deploying.value = true
   try {
-    const res = await deployApp({ appId: appId as any })
+    const res = await deployApp({ appId: appIdParam })
     if (res.data.code === 0) {
       message.success(`部署成功！访问地址：${res.data.data}`)
     } else {
       message.error('部署失败：' + res.data.message)
     }
-  } catch (error) {
+  } catch {
     message.error('部署失败')
   } finally {
     deploying.value = false
   }
 }
 
+const toastIfJsonBlob = async (blob: Blob): Promise<boolean> => {
+  const type = (blob.type || '').toLowerCase()
+  const head = (await blob.slice(0, 8).text()).trimStart()
+  if (!type.includes('json') && !head.startsWith('{')) {
+    return false
+  }
+  try {
+    const parsed = JSON.parse(await blob.text()) as { message?: string }
+    message.error(parsed.message || '下载失败')
+  } catch {
+    message.error('下载失败')
+  }
+  return true
+}
+
+const parseDownloadFileName = (contentDisposition: string | undefined, fallback: string) => {
+  if (!contentDisposition) return fallback
+  const utf8 = contentDisposition.match(/filename\*=(?:UTF-8''|)([^;]+)/i)
+  if (utf8?.[1]) {
+    try {
+      return decodeURIComponent(utf8[1].trim().replace(/^["']|["']$/g, ''))
+    } catch {
+      return utf8[1].trim().replace(/^["']|["']$/g, '')
+    }
+  }
+  const quoted = contentDisposition.match(/filename="([^"]+)"/i)
+  if (quoted?.[1]) return quoted[1]
+  const plain = contentDisposition.match(/filename=([^;]+)/i)
+  if (plain?.[1]) return plain[1].trim().replace(/^["']|["']$/g, '')
+  return fallback
+}
+
 // 下载应用代码
 const handleDownload = async () => {
+  if (!isOwner.value) {
+    message.warning('仅应用所有者可以下载')
+    return
+  }
   if (!generationComplete.value) {
     message.warning('请等待代码生成完成后再下载')
     return
@@ -382,18 +407,19 @@ const handleDownload = async () => {
       responseType: 'blob'
     })
 
-    // 从响应头获取文件名
-    const contentDisposition = response.headers['content-disposition']
-    let fileName = `${appId}.zip`
-    if (contentDisposition) {
-      const fileNameMatch = contentDisposition.match(/filename="?(.+)"?/)
-      if (fileNameMatch && fileNameMatch[1]) {
-        fileName = fileNameMatch[1]
-      }
+    const fileName = parseDownloadFileName(
+      response.headers['content-disposition'],
+      `${appId}.zip`,
+    )
+
+    const rawBlob = response.data instanceof Blob
+      ? response.data
+      : new Blob([response.data])
+    if (await toastIfJsonBlob(rawBlob)) {
+      return
     }
 
-    // 创建下载链接
-    const blob = new Blob([response.data], { type: 'application/zip' })
+    const blob = new Blob([rawBlob], { type: 'application/zip' })
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
@@ -406,11 +432,15 @@ const handleDownload = async () => {
     window.URL.revokeObjectURL(url)
 
     message.success('代码下载成功！')
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('下载失败:', error)
-    if (error.response?.status === 404) {
+    const axiosError = error as { response?: { data?: Blob; status?: number } }
+    if (axiosError.response?.data instanceof Blob && await toastIfJsonBlob(axiosError.response.data)) {
+      return
+    }
+    if (axiosError.response?.status === 404) {
       message.error('应用代码不存在，请先生成代码')
-    } else if (error.response?.status === 403) {
+    } else if (axiosError.response?.status === 403) {
       message.error('无权限下载该应用代码')
     } else {
       message.error('下载失败，请重试')
@@ -423,11 +453,6 @@ const handleDownload = async () => {
 // 显示应用详情
 const showAppDetail = () => {
   detailModalVisible.value = true
-}
-
-// 编辑应用
-const handleEdit = () => {
-  router.push(`/app/edit/${appId}`)
 }
 
 // 刷新应用数据
@@ -574,10 +599,10 @@ const formatElementContext = (element: ElementInfo): string => {
   return `[编辑元素] ${parts.join(', ')}`
 }
 
-const handleEditorMessage = (message: EditorMessage) => {
+const handleEditorMessage = (editorMessage: EditorMessage) => {
   try {
-    if (message.type === MessageType.ELEMENT_SELECTED && message.data) {
-      handleElementSelected(message.data)
+    if (editorMessage.type === MessageType.ELEMENT_SELECTED && editorMessage.data) {
+      handleElementSelected(editorMessage.data)
     }
   } catch (error) {
     console.error('[AppChatPage] Error handling editor message:', error)
@@ -602,30 +627,35 @@ const initVisualEditor = () => {
   }
 }
 
+const refreshPreview = () => {
+  if (!showPreview.value && !generationComplete.value) {
+    return
+  }
+  showPreview.value = true
+  const base = getPreviewUrl(app.value?.codeGenType || '', appId)
+  previewUrl.value = `${base}${base.includes('?') ? '&' : '?'}t=${Date.now()}`
+}
+
+const onPreviewIframeLoad = () => {
+  try {
+    visualEditorManager.value?.destroy()
+    initVisualEditor()
+    if (isEditMode.value) {
+      visualEditorManager.value?.enterEditMode()
+    }
+  } catch (error) {
+    console.error('[AppChatPage] Error on preview load:', error)
+  }
+}
+
 onMounted(() => {
   loadApp()
-
-  // 监听 showPreview 的变化，当预览显示时初始化编辑器
-  // 使用 watch 而不是 setTimeout 更可靠
-  const stopWatch = watch(showPreview, (newValue) => {
-    if (newValue) {
-      console.log('[AppChatPage] Preview shown, waiting for iframe to load...')
-      // 等待 iframe 加载
-      nextTick(() => {
-        setTimeout(() => {
-          initVisualEditor()
-          stopWatch() // 停止监听
-        }, 2000) // 增加到 2 秒，确保 iframe 完全加载
-      })
-    }
-  }, { immediate: true })
 })
 
 onUnmounted(() => {
-  // 清理可视化编辑器
+  generateAbort.value?.abort()
   try {
     visualEditorManager.value?.destroy()
-    console.log('[AppChatPage] Visual editor destroyed')
   } catch (error) {
     console.error('[AppChatPage] Error destroying visual editor:', error)
   }
@@ -672,13 +702,10 @@ onUnmounted(() => {
             type="primary"
             danger
             :loading="deploying"
-            :disabled="!generationComplete"
+            :disabled="!generationComplete || !isOwner"
             @click="handleDeploy"
           >
             部署网站
-          </a-button>
-          <a-button type="text" class="menu-btn">
-            ☰ 菜单
           </a-button>
         </div>
       </div>
@@ -827,9 +854,6 @@ onUnmounted(() => {
                     {{ isEditMode ? '🎨 编辑中' : '✏️ 编辑' }}
                   </a-button>
                 </a-tooltip>
-                <a-button type="text" size="small" :disabled="!isOwner">📎 上传</a-button>
-                <a-button type="text" size="small" :disabled="!isOwner">💾 保存</a-button>
-                <a-button type="text" size="small" :disabled="!isOwner">💬 历史</a-button>
               </div>
               <a-button
                 type="primary"
@@ -849,8 +873,7 @@ onUnmounted(() => {
           <div class="preview-header">
             <h3>生成后的网页展示</h3>
             <div class="preview-actions">
-              <a-button type="text" size="small">🔄 刷新</a-button>
-              <a-button type="text" size="small">📱 响应式</a-button>
+              <a-button type="text" size="small" @click="refreshPreview">🔄 刷新</a-button>
             </div>
           </div>
 
@@ -924,6 +947,8 @@ onUnmounted(() => {
               :src="previewUrl"
               class="preview-iframe"
               frameborder="0"
+              sandbox="allow-scripts allow-forms allow-downloads allow-popups"
+              @load="onPreviewIframeLoad"
             />
           </div>
         </div>

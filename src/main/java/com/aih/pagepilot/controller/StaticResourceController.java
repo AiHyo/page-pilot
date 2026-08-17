@@ -10,7 +10,9 @@ package com.aih.pagepilot.controller;
  */
 
 import com.aih.pagepilot.constant.AppConstant;
+import com.aih.pagepilot.utils.ProjectPathGuard;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -22,7 +24,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.HandlerMapping;
 
-import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Locale;
+import java.util.regex.Pattern;
 
 /**
  * 静态资源访问
@@ -31,8 +40,9 @@ import java.io.File;
 @RequestMapping("/static")
 public class StaticResourceController {
 
-    // 应用生成根目录（用于浏览）
-    private static final String PREVIEW_ROOT_DIR = AppConstant.CODE_OUTPUT_ROOT_DIR;
+    private static final Pattern DEPLOY_KEY = Pattern.compile("^[A-Za-z0-9_-]{1,64}$");
+    private static final String HTML_CSP = "sandbox allow-scripts allow-forms allow-downloads";
+    private static final String VISUAL_EDITOR_HOOK = loadVisualEditorHook();
 
     /**
      * 提供静态资源访问，支持目录重定向
@@ -43,48 +53,116 @@ public class StaticResourceController {
             @PathVariable String deployKey,
             HttpServletRequest request) {
         try {
-            // 获取资源路径
+            if (!DEPLOY_KEY.matcher(deployKey).matches()) {
+                return ResponseEntity.badRequest().build();
+            }
             String resourcePath = (String) request.getAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
             resourcePath = resourcePath.substring(("/static/" + deployKey).length());
-            // 如果是目录访问（不带斜杠），重定向到带斜杠的URL
             if (resourcePath.isEmpty()) {
                 HttpHeaders headers = new HttpHeaders();
                 headers.add("Location", request.getRequestURI() + "/");
                 return new ResponseEntity<>(headers, HttpStatus.MOVED_PERMANENTLY);
             }
-            // 默认返回 index.html
             if (resourcePath.equals("/")) {
                 resourcePath = "/index.html";
             }
-            // 构建文件路径
-            String filePath = PREVIEW_ROOT_DIR + "/" + deployKey + resourcePath;
-            File file = new File(filePath);
-            // 检查文件是否存在
-            if (!file.exists()) {
+            Path file = resolveStaticFile(deployKey, resourcePath);
+            if (file == null || !Files.isRegularFile(file)) {
                 return ResponseEntity.notFound().build();
             }
-            // 返回文件资源
-            Resource resource = new FileSystemResource(file);
+            String filePath = file.toAbsolutePath().toString();
+            if (isHtmlFile(filePath)) {
+                return serveHtml(file);
+            }
             return ResponseEntity.ok()
-                    .header("Content-Type", getContentTypeWithCharset(filePath))
-                    .body(resource);
+                    .header(HttpHeaders.CONTENT_TYPE, getContentTypeWithCharset(filePath))
+                    .header("X-Content-Type-Options", "nosniff")
+                    .body(new FileSystemResource(file));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
     /**
+     * Look up generated preview first, then the deployed copy.
+     */
+    private Path resolveStaticFile(String deployKey, String resourcePath) {
+        String relative = resourcePath.startsWith("/") ? resourcePath.substring(1) : resourcePath;
+        Path generated = resolveJailedFile(AppConstant.CODE_OUTPUT_ROOT_DIR, deployKey, relative);
+        if (generated != null) {
+            return generated;
+        }
+        return resolveJailedFile(AppConstant.CODE_DEPLOY_ROOT_DIR, deployKey, relative);
+    }
+
+    private Path resolveJailedFile(String rootDir, String deployKey, String relativePath) {
+        try {
+            Path root = Paths.get(rootDir, deployKey);
+            Path resolved = ProjectPathGuard.resolveInside(root, relativePath);
+            if (Files.isRegularFile(resolved)) {
+                return resolved;
+            }
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+        return null;
+    }
+
+    private ResponseEntity<Resource> serveHtml(Path file) throws IOException {
+        String html = Files.readString(file, StandardCharsets.UTF_8);
+        html = injectVisualEditorHook(html);
+        byte[] body = html.getBytes(StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, "text/html; charset=UTF-8")
+                .header("Content-Security-Policy", HTML_CSP)
+                .header("X-Content-Type-Options", "nosniff")
+                .contentLength(body.length)
+                .body(new ByteArrayResource(body));
+    }
+
+    private String injectVisualEditorHook(String html) {
+        if (html.contains("id=\"visual-editor-script\"") || html.contains("id='visual-editor-script'")) {
+            return html;
+        }
+        String script = "<script id=\"visual-editor-script\">\n" + VISUAL_EDITOR_HOOK + "\n</script>\n";
+        int bodyClose = html.toLowerCase(Locale.ROOT).lastIndexOf("</body>");
+        if (bodyClose >= 0) {
+            return html.substring(0, bodyClose) + script + html.substring(bodyClose);
+        }
+        return html + script;
+    }
+
+    private boolean isHtmlFile(String filePath) {
+        int dot = filePath.lastIndexOf('.');
+        if (dot < 0) {
+            return false;
+        }
+        return "html".equals(filePath.substring(dot + 1).toLowerCase(Locale.ROOT));
+    }
+
+    /**
      * 根据文件扩展名返回带字符编码的 Content-Type
      */
     private String getContentTypeWithCharset(String filePath) {
-        String extension = filePath.substring(filePath.lastIndexOf('.') + 1).toLowerCase();
+        String extension = filePath.substring(filePath.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
         return switch (extension) {
             case "html" -> "text/html; charset=UTF-8";
             case "css" -> "text/css; charset=UTF-8";
             case "js" -> "application/javascript; charset=UTF-8";
             case "png" -> "image/png";
-            case "jpg" -> "image/jpeg";
+            case "jpg", "jpeg" -> "image/jpeg";
             default -> "application/octet-stream";
         };
+    }
+
+    private static String loadVisualEditorHook() {
+        try (InputStream in = StaticResourceController.class.getResourceAsStream("/visual-editor-hook.js")) {
+            if (in == null) {
+                throw new IllegalStateException("missing visual-editor-hook.js");
+            }
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new ExceptionInInitializerError(e);
+        }
     }
 }

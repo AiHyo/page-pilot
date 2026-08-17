@@ -3,6 +3,7 @@ package com.aih.pagepilot.ai.tools;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.json.JSONObject;
 import com.aih.pagepilot.constant.AppConstant;
+import com.aih.pagepilot.utils.ProjectPathGuard;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.ToolMemoryId;
@@ -34,6 +35,8 @@ public class FileWriteTool extends BaseTool{
             writeContentToFile(targetPath, content);
             log.info("成功写入文件: {}", targetPath.toAbsolutePath());
             return "文件写入成功: " + relativeFilePath;
+        } catch (IllegalArgumentException e) {
+            return "错误：非法文件路径 - " + relativeFilePath;
         } catch (IOException e) {
             String errorMessage = String.format("文件写入失败: %s, 错误: %s", relativeFilePath, e.getMessage());
             log.error(errorMessage, e);
@@ -48,13 +51,8 @@ public class FileWriteTool extends BaseTool{
      * @return
      */
     private Path resolveTargetPath(String relativeFilePath, Long appId) {
-        Path path = Paths.get(relativeFilePath);
-        if (path.isAbsolute()) {
-            return path;
-        }
-        String projectDirName = "vue_project_" + appId;
-        Path projectRoot = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, projectDirName);
-        return projectRoot.resolve(relativeFilePath);
+        Path projectRoot = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, "vue_project_" + appId);
+        return ProjectPathGuard.resolveInside(projectRoot, relativeFilePath);
     }
 
     /**

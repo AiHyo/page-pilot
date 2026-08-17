@@ -13,6 +13,7 @@ import com.aih.pagepilot.exception.ErrorCode;
 import com.aih.pagepilot.exception.ThrowUtils;
 import com.aih.pagepilot.model.dto.AppAddRequest;
 import com.aih.pagepilot.model.dto.AppAdminUpdateRequest;
+import com.aih.pagepilot.model.dto.AppChatGenRequest;
 import com.aih.pagepilot.model.dto.AppDeployRequest;
 import com.aih.pagepilot.model.dto.AppQueryRequest;
 import com.aih.pagepilot.model.dto.AppUpdateRequest;
@@ -25,6 +26,7 @@ import com.aih.pagepilot.service.ProjectDownloadService;
 import com.aih.pagepilot.service.UserService;
 import com.mybatisflex.core.paginate.Page;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
@@ -192,7 +194,8 @@ public class AppController {
     @Cacheable(
             value = "featured_app_page",
             key = "T(com.aih.pagepilot.utils.CacheKeyUtils).generateKey(#appQueryRequest)",
-            condition = "#appQueryRequest.pageNum <= 10"
+            condition = "#appQueryRequest.pageNum <= 10",
+            unless = "#result == null || #result.data == null || #result.data.totalRow == 0"
     )
     @GetMapping("/list/featured")
     public BaseResponse<Page<AppVO>> listFeaturedAppVOByPage(AppQueryRequest appQueryRequest) {
@@ -246,6 +249,7 @@ public class AppController {
      */
     @PutMapping("/admin/{id}")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    @CacheEvict(value = "featured_app_page", allEntries = true)
     public BaseResponse<Boolean> updateAppByAdmin(@PathVariable Long id, @RequestBody AppAdminUpdateRequest appAdminUpdateRequest) {
         if (id == null || id <= 0 || appAdminUpdateRequest == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
@@ -316,12 +320,13 @@ public class AppController {
      * @param request 请求对象
      * @return 生成结果流
      */
-    @GetMapping(value = "/chat/gen/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @PostMapping(value = "/chat/gen/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @RateLimit(limitType = RateLimitType.USER, rate = 5, rateInterval = 60, message = "生成请求过于频繁，请稍后再试")
-    public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam Long appId,
-                                                       @RequestParam String message,
+    public Flux<ServerSentEvent<String>> chatToGenCode(@RequestBody AppChatGenRequest genRequest,
                                                        HttpServletRequest request) {
-        // 参数校验
+        ThrowUtils.throwIf(genRequest == null, ErrorCode.PARAMS_ERROR);
+        Long appId = genRequest.getAppId();
+        String message = genRequest.getMessage();
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用ID无效");
         ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "用户消息不能为空");
         // 获取当前登录用户

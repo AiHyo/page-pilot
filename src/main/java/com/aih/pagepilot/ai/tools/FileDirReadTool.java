@@ -4,6 +4,7 @@ import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import com.aih.pagepilot.constant.AppConstant;
+import com.aih.pagepilot.utils.ProjectPathGuard;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.ToolMemoryId;
@@ -48,12 +49,10 @@ public class FileDirReadTool extends BaseTool{
             @ToolMemoryId Long appId
     ) {
         try {
-            Path path = Paths.get(relativeDirPath == null ? "" : relativeDirPath);
-            if (!path.isAbsolute()) {
-                String projectDirName = "vue_project_" + appId;
-                Path projectRoot = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, projectDirName);
-                path = projectRoot.resolve(relativeDirPath == null ? "" : relativeDirPath);
-            }
+            Path projectRoot = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, "vue_project_" + appId);
+            Path path = StrUtil.isBlank(relativeDirPath)
+                    ? projectRoot.toAbsolutePath().normalize()
+                    : ProjectPathGuard.resolveInside(projectRoot, relativeDirPath);
             File targetDir = path.toFile();
             if (!targetDir.exists() || !targetDir.isDirectory()) {
                 return "错误：目录不存在或不是目录 - " + relativeDirPath;
@@ -75,7 +74,7 @@ public class FileDirReadTool extends BaseTool{
                     .forEach(file -> {
                         int depth = getRelativeDepth(targetDir, file);
                         String indent = "  ".repeat(depth);
-                        structure.append(indent).append(file.getName());
+                        structure.append(indent).append(file.getName()).append('\n');
                     });
             return structure.toString();
 

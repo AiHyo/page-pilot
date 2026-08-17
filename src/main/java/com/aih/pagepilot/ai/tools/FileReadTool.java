@@ -2,6 +2,7 @@ package com.aih.pagepilot.ai.tools;
 
 import cn.hutool.json.JSONObject;
 import com.aih.pagepilot.constant.AppConstant;
+import com.aih.pagepilot.utils.ProjectPathGuard;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.ToolMemoryId;
@@ -30,16 +31,14 @@ public class FileReadTool extends BaseTool {
             @ToolMemoryId Long appId
     ) {
         try {
-            Path path = Paths.get(relativeFilePath);
-            if (!path.isAbsolute()) {
-                String projectDirName = "vue_project_" + appId;
-                Path projectRoot = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, projectDirName);
-                path = projectRoot.resolve(relativeFilePath);
-            }
+            Path projectRoot = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, "vue_project_" + appId);
+            Path path = ProjectPathGuard.resolveInside(projectRoot, relativeFilePath);
             if (!Files.exists(path) || !Files.isRegularFile(path)) {
                 return "错误：文件不存在或不是文件 - " + relativeFilePath;
             }
             return Files.readString(path);
+        } catch (IllegalArgumentException e) {
+            return "错误：非法文件路径 - " + relativeFilePath;
         } catch (IOException e) {
             String errorMessage = "读取文件失败: " + relativeFilePath + ", 错误: " + e.getMessage();
             log.error(errorMessage, e);

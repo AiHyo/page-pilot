@@ -29,12 +29,15 @@ public class ScreenshotServiceImpl implements ScreenshotService {
     @Resource
     private TencentCosManager cosManager;
 
+    @Resource
+    private WebScreenshotUtils webScreenshotUtils;
+
     @Override
     public String generateAndUploadScreenshot(String sourceUrl) throws IOException {
         ThrowUtils.throwIf(StrUtil.isBlank(sourceUrl), ErrorCode.PARAMS_ERROR, "网页URL不能为空");
         log.info("开始生成网页截图，URL: {}", sourceUrl);
         // 1. 生成本地截图
-        String localScreenshotPath = WebScreenshotUtils.saveWebPageScreenshot(sourceUrl);
+        String localScreenshotPath = webScreenshotUtils.saveWebPageScreenshot(sourceUrl);
         ThrowUtils.throwIf(StrUtil.isBlank(localScreenshotPath), ErrorCode.OPERATION_ERROR, "本地截图生成失败");
         try {
             // 2. 上传到对象存储

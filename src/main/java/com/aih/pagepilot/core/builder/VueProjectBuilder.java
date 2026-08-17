@@ -48,8 +48,10 @@ public class VueProjectBuilder {
             return false;
         }
         log.info("开始构建 Vue 项目: {}", projectPath);
-        // 执行 npm install
-        if (!executeNpmInstall(projectDir)) {
+        File nodeModules = new File(projectDir, "node_modules");
+        if (nodeModules.isDirectory()) {
+            log.info("跳过 npm install，已存在 node_modules: {}", nodeModules.getAbsolutePath());
+        } else if (!executeNpmInstall(projectDir)) {
             log.error("npm install 执行失败");
             return false;
         }

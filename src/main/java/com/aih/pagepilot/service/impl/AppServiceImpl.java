@@ -8,7 +8,7 @@ import cn.hutool.core.util.StrUtil;
 import com.aih.pagepilot.ai.AiCodeGenTypeRoutingService;
 import com.aih.pagepilot.ai.AiCodeGeneratorService;
 import com.aih.pagepilot.ai.model.enums.CodeGenTypeEnum;
-import com.aih.pagepilot.common.ResultUtils;
+import com.aih.pagepilot.common.SortFields;
 import com.aih.pagepilot.core.AiCodeGeneratorFacade;
 import com.aih.pagepilot.core.builder.VueProjectBuilder;
 import com.aih.pagepilot.core.handler.StreamHandlerExecutor;
@@ -170,7 +170,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         String sortField = appQueryRequest.getSortField();
         String sortOrder = appQueryRequest.getSortOrder();
 
-        return QueryWrapper.create()
+        QueryWrapper queryWrapper = QueryWrapper.create()
                 .eq(App::getId, id)
                 .like(App::getAppName, appName)
                 .like(App::getCover, cover)
@@ -178,8 +178,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 .eq(App::getCodeGenType, codeGenType)
                 .eq(App::getDeployKey, deployKey)
                 .eq(App::getPriority, priority)
-                .eq(App::getUserId, userId)
-                .orderBy(sortField, "ascend".equals(sortOrder));
+                .eq(App::getUserId, userId);
+        SortFields.apply(queryWrapper, sortField, sortOrder, SortFields.APP);
+        return queryWrapper;
     }
 
     @Override

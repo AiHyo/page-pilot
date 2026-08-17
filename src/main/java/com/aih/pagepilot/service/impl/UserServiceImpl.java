@@ -3,6 +3,8 @@ package com.aih.pagepilot.service.impl;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.crypto.digest.BCrypt;
+import com.aih.pagepilot.common.SortFields;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.aih.pagepilot.exception.BusinessException;
@@ -15,6 +17,7 @@ import com.aih.pagepilot.model.vo.LoginUserVO;
 import com.aih.pagepilot.model.vo.UserVO;
 import com.aih.pagepilot.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
 
@@ -31,7 +34,10 @@ import static com.aih.pagepilot.constant.UserConstant.USER_LOGIN_STATE;
  * @author AiHyo
  */
 @Service
+@Slf4j
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
+
+    private static final String LEGACY_SALT = "aih";
 
     @Override
     public long userRegister(String userAccount, String userPassword, String checkPassword) {
@@ -92,33 +98,29 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (userPassword.length() < 8) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "密码长度过短");
         }
-        // 2. 加密
-        String encryptPassword = getEncryptPassword(userPassword);
-        // 3. 查询用户是否存在
         QueryWrapper queryWrapper = new QueryWrapper();
         queryWrapper.eq(User::getUserAccount, userAccount);
-        queryWrapper.eq(User::getUserPassword, encryptPassword);
         User user = this.mapper.selectOneByQuery(queryWrapper);
-        if (user == null) {
+        if (user == null || !passwordMatches(userPassword, user.getUserPassword())) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户不存在或密码错误");
         }
-        // 4. 如果用户存在，记录用户的登录态
-        request.getSession().setAttribute(USER_LOGIN_STATE, user);
-        // 5. 返回脱敏的用户信息
+        upgradeLegacyPassword(user, userPassword);
+        request.getSession().setAttribute(USER_LOGIN_STATE, user.getId());
         return this.getLoginUserVO(user);
     }
 
     @Override
     public User getLoginUser(HttpServletRequest request) {
-        // 先判断用户是否登录
         Object userObj = request.getSession().getAttribute(USER_LOGIN_STATE);
-        User currentUser = (User) userObj;
-        if (currentUser == null || currentUser.getId() == null) {
+        Long userId = extractLoginUserId(userObj);
+        if (userId == null) {
             throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
         }
-        // 从数据库查询当前用户信息
-        long userId = currentUser.getId();
-        currentUser = this.getById(userId);
+        // Drop leftover User objects (they include the password hash) without forcing re-login.
+        if (userObj instanceof User) {
+            request.getSession().setAttribute(USER_LOGIN_STATE, userId);
+        }
+        User currentUser = this.getById(userId);
         if (currentUser == null) {
             throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
         }
@@ -169,19 +171,65 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         String userRole = userQueryRequest.getUserRole();
         String sortField = userQueryRequest.getSortField();
         String sortOrder = userQueryRequest.getSortOrder();
-        return QueryWrapper.create()
+        QueryWrapper queryWrapper = QueryWrapper.create()
                 .eq(User::getId, id)
                 .eq(User::getUserRole, userRole)
                 .like(User::getUserAccount, userAccount)
                 .like(User::getUserName, userName)
-                .like(User::getUserProfile, userProfile)
-                .orderBy(sortField, "ascend".equals(sortOrder));
+                .like(User::getUserProfile, userProfile);
+        SortFields.apply(queryWrapper, sortField, sortOrder, SortFields.USER);
+        return queryWrapper;
     }
 
     @Override
     public String getEncryptPassword(String userPassword) {
-        // 盐值，混淆密码
-        final String SALT = "aih";
-        return DigestUtils.md5DigestAsHex((userPassword + SALT).getBytes(StandardCharsets.UTF_8));
+        return BCrypt.hashpw(userPassword);
+    }
+
+    private Long extractLoginUserId(Object userObj) {
+        if (userObj instanceof User user) {
+            return user.getId();
+        }
+        if (userObj instanceof Number number) {
+            return number.longValue();
+        }
+        return null;
+    }
+
+    private boolean passwordMatches(String rawPassword, String storedPassword) {
+        if (StrUtil.isBlank(storedPassword)) {
+            return false;
+        }
+        if (isBcryptHash(storedPassword)) {
+            return BCrypt.checkpw(rawPassword, storedPassword);
+        }
+        return legacyMd5(rawPassword).equalsIgnoreCase(storedPassword);
+    }
+
+    private void upgradeLegacyPassword(User user, String rawPassword) {
+        if (user.getId() == null || isBcryptHash(user.getUserPassword())) {
+            return;
+        }
+        if (!legacyMd5(rawPassword).equalsIgnoreCase(user.getUserPassword())) {
+            return;
+        }
+        try {
+            User update = new User();
+            update.setId(user.getId());
+            update.setUserPassword(BCrypt.hashpw(rawPassword));
+            this.updateById(update);
+        } catch (Exception e) {
+            log.warn("Failed to upgrade password hash for user {}", user.getId(), e);
+        }
+    }
+
+    private static boolean isBcryptHash(String storedPassword) {
+        return storedPassword.startsWith("$2a$")
+                || storedPassword.startsWith("$2b$")
+                || storedPassword.startsWith("$2y$");
+    }
+
+    private static String legacyMd5(String rawPassword) {
+        return DigestUtils.md5DigestAsHex((rawPassword + LEGACY_SALT).getBytes(StandardCharsets.UTF_8));
     }
 }

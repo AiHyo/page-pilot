@@ -49,7 +49,6 @@ marked.setOptions({
   gfm: true,
   breaks: true,
   pedantic: false,
-  sanitize: false,
   smartLists: true,
   smartypants: false,
 })
@@ -63,7 +62,12 @@ const renderedContent = computed(() => {
     return DOMPurify.sanitize(html)
   } catch (error) {
     console.error('Markdown渲染错误:', error)
-    return `<pre>${props.content}</pre>`
+    const escaped = props.content
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+    return DOMPurify.sanitize(`<pre>${escaped}</pre>`)
   }
 })
 </script>

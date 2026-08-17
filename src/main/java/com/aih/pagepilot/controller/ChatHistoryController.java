@@ -11,6 +11,7 @@ import com.aih.pagepilot.model.dto.ChatHistoryAddRequest;
 import com.aih.pagepilot.model.dto.ChatHistoryQueryRequest;
 import com.aih.pagepilot.model.entity.ChatHistory;
 import com.aih.pagepilot.model.entity.User;
+import com.aih.pagepilot.model.enums.MessageTypeEnum;
 import com.aih.pagepilot.model.vo.ChatHistoryVO;
 import com.aih.pagepilot.service.ChatHistoryService;
 import com.aih.pagepilot.service.UserService;
@@ -65,7 +66,7 @@ public class ChatHistoryController {
 
         ChatHistory chatHistory = new ChatHistory();
         chatHistory.setMessage(chatHistoryAddRequest.getMessage());
-        chatHistory.setMessageType(chatHistoryAddRequest.getMessageType());
+        chatHistory.setMessageType(MessageTypeEnum.USER.getValue());
         chatHistory.setAppId(chatHistoryAddRequest.getAppId());
         chatHistory.setUserId(loginUser.getId());
         chatHistory.setCreateTime(LocalDateTime.now());

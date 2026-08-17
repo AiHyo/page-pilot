@@ -76,10 +76,7 @@ public class GlobalExceptionHandler {
                 String sseData = "event: business-error\ndata: " + errorJson + "\n\n";
                 response.getWriter().write(sseData);
                 response.getWriter().flush();
-                // 发送结束事件
-                response.getWriter().write("event: done\ndata: {}\n\n");
-                response.getWriter().flush();
-                // 表示已处理SSE请求
+                // business-error is terminal; do not also emit `done` (B9)
                 return true;
             } catch (IOException ioException) {
                 log.error("Failed to write SSE error response", ioException);

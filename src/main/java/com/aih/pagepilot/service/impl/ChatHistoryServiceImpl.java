@@ -3,6 +3,7 @@ package com.aih.pagepilot.service.impl;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
+import com.aih.pagepilot.common.SortFields;
 import com.aih.pagepilot.constant.UserConstant;
 import com.aih.pagepilot.exception.BusinessException;
 import com.aih.pagepilot.exception.ErrorCode;
@@ -196,11 +197,9 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
             queryWrapper.lt(ChatHistory::getCreateTime, lastCreateTime);
         }
 
-        // 默认按创建时间降序排序
-        if (StrUtil.isBlank(sortField)) {
+        SortFields.apply(queryWrapper, sortField, sortOrder, SortFields.CHAT_HISTORY);
+        if (SortFields.resolve(sortField, SortFields.CHAT_HISTORY) == null) {
             queryWrapper.orderBy(ChatHistory::getCreateTime, false);
-        } else {
-            queryWrapper.orderBy(sortField, "ascend".equals(sortOrder));
         }
 
         return queryWrapper;

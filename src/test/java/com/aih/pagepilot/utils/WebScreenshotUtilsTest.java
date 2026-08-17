@@ -6,10 +6,9 @@ import org.junit.jupiter.api.Test;
 class WebScreenshotUtilsTest {
 
     @Test
-    void saveWebPageScreenshot() {
-        String testUrl = "https://github.com/AiHyo";
-        String webPageScreenshot = WebScreenshotUtils.saveWebPageScreenshot(testUrl);
-        Assertions.assertNotNull(webPageScreenshot);
+    void blankUrlReturnsNullWithoutStartingDriver() {
+        WebScreenshotUtils utils = new WebScreenshotUtils();
+        Assertions.assertNull(utils.saveWebPageScreenshot(""));
+        Assertions.assertNull(utils.saveWebPageScreenshot(null));
     }
-
 }
