@@ -13,9 +13,13 @@ export const useLoginUserStore = defineStore('loginUser', () => {
 
   // 获取登录用户信息
   async function fetchLoginUser() {
-    const res = await getLoginUser()
-    if (res.data.code === 0 && res.data.data) {
-      loginUser.value = res.data.data
+    try {
+      const res = await getLoginUser()
+      if (res.data.code === 0 && res.data.data) {
+        loginUser.value = res.data.data
+      }
+    } catch {
+      // Guest: keep default. A 500 here must not block routing.
     }
   }
 
