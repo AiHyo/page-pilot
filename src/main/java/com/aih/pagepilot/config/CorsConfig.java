@@ -12,11 +12,15 @@ public class CorsConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        // 覆盖所有请求
+        // Sandboxed preview iframe has origin "null" and loads Vue ES modules via CORS.
+        // Must be registered before /** or Spring answers those GETs with 403.
+        registry.addMapping("/static/**")
+                .allowedOriginPatterns("*")
+                .allowCredentials(false)
+                .allowedMethods("GET", "HEAD", "OPTIONS")
+                .allowedHeaders("*");
         registry.addMapping("/**")
-                // 允许发送 Cookie
                 .allowCredentials(true)
-                // 放行哪些域名（必须用 patterns，否则 * 会和 allowCredentials 冲突）
                 .allowedOriginPatterns("http://localhost:5175", "http://127.0.0.1:5175")
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")

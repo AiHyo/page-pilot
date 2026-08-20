@@ -22,9 +22,10 @@
 - Session attribute `USER_LOGIN_STATE` is `Long` user id. `getLoginUser` may read a leftover `User` object, then rewrite the session to the id.
 - New password hashes: Hutool `BCrypt.hashpw`. Login still accepts legacy `md5(password + "aih")` and upgrades on success.
 - Cookie: `http-only: true`, `same-site: lax`.
-- CORS credentials: only `http://localhost:5175` and `http://127.0.0.1:5175`.
-- HTML static responses: `Content-Security-Policy: sandbox allow-scripts allow-forms allow-downloads`, `X-Content-Type-Options: nosniff`, inject `visual-editor-hook.js` at serve time (do not rewrite files on disk).
-- Chat iframe: `sandbox="allow-scripts allow-forms allow-downloads allow-popups"` — no `allow-same-origin`.
+- Session CORS (`/**`): credentials only for `http://localhost:5175` and `http://127.0.0.1:5175`. Never `*` with credentials on `/**`.
+- Static CORS (`/static/**`): register **before** `/**`. `allowedOriginPatterns("*")` + `allowCredentials(false)` so a sandboxed preview (`Origin: null`) can CORS-fetch Vue `dist` ES modules. Do **not** set `Access-Control-Allow-Origin` on `StaticResourceController` (duplicate headers). Do **not** add `allow-same-origin` to the iframe sandbox to “fix” Vue modules.
+- HTML static responses: `Content-Security-Policy: sandbox allow-scripts allow-forms allow-downloads`, `X-Content-Type-Options: nosniff`, `Cache-Control: no-store`, `Cross-Origin-Resource-Policy: cross-origin`, inject `visual-editor-hook.js` at serve time (do not rewrite files on disk). Non-HTML static files also send CORP `cross-origin`.
+- Chat iframe: `sandbox="allow-scripts allow-forms allow-downloads allow-popups"` — no `allow-same-origin`. After generate / history load / refresh, set iframe `src` with a `?t=` cache-bust so the browser does not keep pre-generate HTML.
 - `sortField` goes through `SortFields.apply` allow-list. Raw client strings never enter `orderBy`.
 
 ### 4. Validation & Error Matrix
@@ -42,7 +43,7 @@
 ### 5. Good / Base / Bad Cases
 
 - Good: `POST` `{"appId":"446839947227643904","message":"加一个按钮"}` as the owner.
-- Base: preview `GET /api/static/html_{id}/index.html` returns HTML + CSP + hook.
+- Base: preview `GET /api/static/html_{id}/index.html` returns HTML + CSP + `no-store` + CORP + hook. Vue `dist` JS is a CORS GET with `Origin: null`.
 - Bad: `Number("446839947227643904")` in JS (precision loss). `GET .../gen/code?message=`. `../application.yml` under static.
 
 ### 6. Tests Required
@@ -82,3 +83,6 @@ await postSse('/api/app/chat/gen/code', { appId, message }, onEvent, signal)
 - Chat `messageType` in DB is `user`/`ai`, not `USER`/`AI`. Map both when rendering.
 - Vue delete tool directory is `vue_project_{id}` (underscore). `vue_project{id}` deletes the wrong folder.
 - Visual editor cannot use `iframe.contentDocument` once the iframe is sandboxed. Use the serve-time hook + `event.source === iframe.contentWindow`.
+- Adding `allow-same-origin` to the chat iframe steals the parent origin (session). Vue ES modules need `/static/**` CORS without credentials, not a weaker sandbox.
+- Registering `/**` CORS before `/static/**` makes Spring first-match `Origin: null` as 403.
+- Setting ACAO both in `CorsConfig` and on the static controller produces duplicate CORS headers.

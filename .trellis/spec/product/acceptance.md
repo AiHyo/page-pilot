@@ -10,7 +10,8 @@ Interview demo on `http://localhost:5175` as `demo_user` / `demo123456`.
 - `CODE_DEPLOY_ROOT_DIR` is `tmp/code_deploy` (not `code_output`).
 - Generate SSE is rate-limited: 5 / 60s / user.
 - Generate is **POST** `/api/app/chat/gen/code` with `{ appId, message }`. `appId` must stay a string in JS (snowflake). GET generate must stay gone (405).
-- Preview iframe is sandboxed (no `allow-same-origin`). HTML from `/api/static` carries CSP sandbox + a serve-time visual-editor hook.
+- Preview iframe is sandboxed (no `allow-same-origin`). HTML from `/api/static` carries CSP sandbox, `Cache-Control: no-store`, CORP `cross-origin`, and a serve-time visual-editor hook. Chat `src` cache-busts with `?t=` after generate/load/refresh.
+- Vue `dist` ES modules from that iframe (`Origin: null`) depend on `/static/**` CORS without credentials, registered before session `/**`. Do not “fix” this with `allow-same-origin`.
 
 ## Parent done when all children pass
 

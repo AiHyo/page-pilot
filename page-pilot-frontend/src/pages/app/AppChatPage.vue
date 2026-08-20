@@ -51,6 +51,11 @@ const historyLoaded = ref(false)
 const previewUrl = ref('')
 const showPreview = ref(false)
 
+const assignPreviewUrl = () => {
+  const base = getPreviewUrl(app.value?.codeGenType || '', appId)
+  previewUrl.value = `${base}${base.includes('?') ? '&' : '?'}t=${Date.now()}`
+}
+
 // 权限相关
 const isOwner = ref(false)
 
@@ -105,7 +110,7 @@ const loadHistoryMessages = async () => {
       // 如果有历史消息且消息数量>=2，显示预览
       if (historyMessages.length >= 2) {
         showPreview.value = true
-        previewUrl.value = getPreviewUrl(app.value?.codeGenType || '', appId)
+        assignPreviewUrl()
         generationComplete.value = true
       }
 
@@ -280,7 +285,7 @@ const sendMessage = async (content: string, isInitial = false) => {
     isGenerating.value = false
     generationComplete.value = true
     showPreview.value = true
-    previewUrl.value = getPreviewUrl(app.value?.codeGenType || '', appId)
+    assignPreviewUrl()
     message.success('代码生成完成！')
     if (selectedElement.value) {
       clearSelectedElement()
@@ -653,8 +658,7 @@ const refreshPreview = () => {
     return
   }
   showPreview.value = true
-  const base = getPreviewUrl(app.value?.codeGenType || '', appId)
-  previewUrl.value = `${base}${base.includes('?') ? '&' : '?'}t=${Date.now()}`
+  assignPreviewUrl()
 }
 
 const onPreviewIframeLoad = () => {

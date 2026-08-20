@@ -46,7 +46,7 @@ public class StaticResourceController {
 
     /**
      * 提供静态资源访问，支持目录重定向
-     * 访问格式：http://localhost:8123/api/static/{deployKey}[/{fileName}]
+     * 访问格式：http://localhost:8124/api/static/{deployKey}[/{fileName}]
      */
     @GetMapping("/{deployKey}/**")
     public ResponseEntity<Resource> serveStaticResource(
@@ -77,6 +77,7 @@ public class StaticResourceController {
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_TYPE, getContentTypeWithCharset(filePath))
                     .header("X-Content-Type-Options", "nosniff")
+                    .header("Cross-Origin-Resource-Policy", "cross-origin")
                     .body(new FileSystemResource(file));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
@@ -114,8 +115,10 @@ public class StaticResourceController {
         byte[] body = html.getBytes(StandardCharsets.UTF_8);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_TYPE, "text/html; charset=UTF-8")
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
                 .header("Content-Security-Policy", HTML_CSP)
                 .header("X-Content-Type-Options", "nosniff")
+                .header("Cross-Origin-Resource-Policy", "cross-origin")
                 .contentLength(body.length)
                 .body(new ByteArrayResource(body));
     }

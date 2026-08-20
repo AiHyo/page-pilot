@@ -27,5 +27,6 @@
 ## Quality Check
 
 - SSE `done` must not be followed by a false “生成失败” toast
-- Preview iframe must load the **generated** site, not 404 / wrong project
+- Preview iframe must load the **generated** site, not 404 / wrong project / stale cached HTML (`?t=` cache-bust + HTML `Cache-Control: no-store`)
 - Deploy URL must be reachable on this machine (`/api/static/...` locally)
+- Vue preview in a sandboxed iframe (no `allow-same-origin`) must load `dist` ES modules via `/static/**` CORS without credentials
