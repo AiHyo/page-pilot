@@ -85,3 +85,41 @@ Closed confirmed bugs, demo-safe vulns, and cheap optimizations. Generate is POS
 ### Next Steps
 
 - Ship uncommitted iOS visual system onto login, home, and AppChatPage without breaking generate/sandbox
+
+
+## Session 2: Make local demo reproducible
+
+**Date**: 2026-08-20
+**Task**: Make local demo reproducible
+**Branch**: `master`
+
+### Summary
+
+Pinned 8124/5175, walked demo_user generate-preview-deploy, cache-busted preview, and CORS-loaded Vue modules in the sandboxed iframe.
+
+### Main Changes
+
+- Pin Vite 5175 / proxy 8124 and README local-run flags
+- Do not block routing when get/login fails
+- Cache-bust preview iframe after generate; HTML Cache-Control no-store
+- /static CORS without credentials so sandboxed Vue dist ES modules load; keep iframe without allow-same-origin
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `aa2dcb9` | (see git log) |
+| `091d647` | (see git log) |
+| `bd9b698` | (see git log) |
+
+### Testing
+
+- [OK] demo_user login, HTML generate, deploy 2WEl4r, Vue todo iframe
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Keep Docker Desktop Resource Saver off; visual-chat and bootstrap-guidelines still open
