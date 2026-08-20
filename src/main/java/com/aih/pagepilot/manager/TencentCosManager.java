@@ -103,7 +103,9 @@ public class TencentCosManager {
      */
     public String getFileUrl(String key) {
         // 使用基础URL和文件key拼接成完整URL
-        return baseUrl + "/" + key;
+        String host = baseUrl == null ? "" : baseUrl.replaceAll("/+$", "");
+        String path = key == null ? "" : key.replaceAll("^/+", "");
+        return host + "/" + path;
     }
 
     /**

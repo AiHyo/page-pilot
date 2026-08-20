@@ -16,16 +16,18 @@ export default defineConfig({
     },
   },
   server: {
+    host: '127.0.0.1',
+    port: 5175,
+    strictPort: true,
     proxy: {
       '/api': {
-        // 默认后端端口 8123；本地多项目并行时用 VITE_PROXY_TARGET 覆盖（如 http://localhost:8124）
-        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8123',
+        // 本机 8123 是 z-ai-agent。覆盖：VITE_PROXY_TARGET=http://localhost:8123
+        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8124',
         changeOrigin: true,
-        ws: true, // 支持websocket和SSE
+        ws: true,
       },
-      // 代理生成的网站静态资源
       '/generated': {
-        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8123',
+        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8124',
         changeOrigin: true,
       }
     }

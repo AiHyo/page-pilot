@@ -5,7 +5,7 @@ Interview demo on `http://localhost:5175` as `demo_user` / `demo123456`.
 ## Already known constraints
 
 - Backend yaml default port is **8123**. Local must pass `--server.port=8124`.
-- Vite proxy and `env.ts` default to **8123** (z-ai-agent). Local must set `VITE_PROXY_TARGET=http://localhost:8124` and preview must not assume 8123.
+- Vite now defaults to **5175** and proxies `/api` to **8124**. `VITE_PROXY_TARGET` only if the backend is not on 8124.
 - Deploy host default is `http://localhost` (no port). Local must set `-Dapp.code.deploy.host=http://localhost:8124/api/static`.
 - `CODE_DEPLOY_ROOT_DIR` is `tmp/code_deploy` (not `code_output`).
 - Generate SSE is rate-limited: 5 / 60s / user.

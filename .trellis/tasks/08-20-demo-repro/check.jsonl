@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/product/acceptance.md", "reason": "Must still login and preview"}
+{"file": ".trellis/spec/backend/security-contracts.md", "reason": "Do not regress generate POST or sandbox"}

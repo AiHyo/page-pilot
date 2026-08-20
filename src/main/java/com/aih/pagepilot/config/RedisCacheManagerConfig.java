@@ -45,7 +45,9 @@ public class RedisCacheManagerConfig {
         
         return RedisCacheManager.builder(redisConnectionFactory)
                 .cacheDefaults(defaultConfig)
-                // 针对 good_app_page 配置5分钟过期
+                // 精选列表：短 TTL，避免空列表被缓存半小时
+                .withCacheConfiguration("featured_app_page",
+                        defaultConfig.entryTtl(Duration.ofMinutes(2)))
                 .withCacheConfiguration("good_app_page",
                         defaultConfig.entryTtl(Duration.ofMinutes(5)))
                 .build();

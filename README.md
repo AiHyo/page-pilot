@@ -17,7 +17,7 @@
 
 ## 本地运行
 
-需要 JDK 21、MySQL、Redis、Node（生成 Vue 工程时）。
+需要 JDK 21、MySQL（库 `page_pilot`，端口 3306）、Redis（6379）、Node（生成 Vue 工程时）。本机容器名一般是 `page-pilot-mysql` / `page-pilot-redis`。
 
 1. 复制配置，不要提交密钥：
 
@@ -29,10 +29,10 @@ copy src\main\resources\application-local-demo.yml src\main\resources\applicatio
 
 2. 执行 `sql/create_table.sql`，库名默认 `page_pilot`。
 
-3. 启动：
+3. 启动（本仓库本地演示约定 **后端 8124、前端 5175**。`application.yml` 里的 8123 不要直接用，本机 8123 是别的项目）：
 
 ```bash
-mvnw.cmd spring-boot:run
+mvnw.cmd spring-boot:run "-Dspring-boot.run.arguments=--server.port=8124" "-Dspring-boot.run.jvmArguments=-Dapp.code.deploy.host=http://localhost:8124/api/static"
 ```
 
 ```bash
@@ -41,7 +41,9 @@ npm install
 npm run dev
 ```
 
-后端默认 `http://localhost:8123/api`。
+前端会监听 `http://127.0.0.1:5175/`，`/api` 代理到 `http://localhost:8124`。演示账号 `demo_user` / `demo123456`。
+
+若后端必须开在 8123：启动 Vite 前设置 `VITE_PROXY_TARGET=http://localhost:8123`。
 
 ## 仓库
 
